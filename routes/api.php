@@ -6,6 +6,7 @@ use App\Http\Controllers\Api\ProjectController;
 use App\Http\Controllers\Api\TeamController;
 use App\Http\Controllers\Api\ContactController;
 use App\Http\Controllers\Api\AuthController;
+use App\Http\Controllers\Api\WorkController;
 use App\Http\Controllers\MediaController;
 
 /*
@@ -75,6 +76,17 @@ Route::middleware(['auth:sanctum'])->prefix('media')->group(function () {
     Route::delete('/{id}', [MediaController::class, 'destroy']);
 });
 
+// Works management routes - Protected by authentication for CMS
+Route::middleware(['auth:sanctum'])->prefix('works')->group(function () {
+    Route::post('/list', [WorkController::class, 'index']); // Main endpoint for listing works with complex filtering
+    Route::post('/', [WorkController::class, 'store']);
+    Route::get('/{id}', [WorkController::class, 'show']);
+    Route::put('/{id}', [WorkController::class, 'update']);
+    Route::delete('/{id}', [WorkController::class, 'destroy']);
+    Route::patch('/{id}/publish', [WorkController::class, 'publish']);
+    Route::patch('/{id}/unpublish', [WorkController::class, 'unpublish']);
+});
+
 // Public media serving route - accessible without authentication
 Route::get('/media/serve/{filename}', [MediaController::class, 'serve'])
     ->name('media.serve');
@@ -90,6 +102,13 @@ Route::prefix('v1')->group(function () {
     Route::get('/projects', [ProjectController::class, 'index']);
     Route::get('/projects/{id}', [ProjectController::class, 'show']);
     Route::get('/projects/category/{category}', [ProjectController::class, 'getByCategory']);
+    
+    // Public Works endpoints (for frontend display)
+    Route::get('/works', [WorkController::class, 'index'])->defaults('published', 'true');
+    Route::get('/works/{id}', [WorkController::class, 'show']);
+    Route::get('/works/category/{category}', function($category) {
+        return app(WorkController::class)->index(request()->merge(['category' => $category, 'published' => 'true']));
+    });
     
     // Team endpoints
     Route::get('/team', [TeamController::class, 'index']);
