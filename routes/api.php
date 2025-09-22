@@ -66,7 +66,11 @@ Route::prefix('auth')->group(function () {
 // Media routes - Protected by authentication for management
 Route::middleware(['auth:sanctum'])->prefix('media')->group(function () {
     Route::get('/', [MediaController::class, 'index']);
-    Route::post('/upload', [MediaController::class, 'upload']);
+    Route::post('/upload', [MediaController::class, 'upload']); // General upload (routes to specific methods)
+    Route::post('/upload-image', [MediaController::class, 'uploadImage']); // Specific image upload
+    Route::post('/upload-video', [MediaController::class, 'uploadVideo']); // Specific video upload
+    Route::post('/upload-document', [MediaController::class, 'uploadDocument']); // Specific document upload
+    Route::post('/{id}/update-poster', [MediaController::class, 'updateVideoPoster']); // Update video poster
     Route::put('/{id}', [MediaController::class, 'update']);
     Route::delete('/{id}', [MediaController::class, 'destroy']);
 });

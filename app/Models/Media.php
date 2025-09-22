@@ -16,7 +16,9 @@ class Media extends Model
         'extension',
         'alt_text',
         'description',
-        'is_active'
+        'is_active',
+        'poster_path',
+        'poster_filename'
     ];
 
     protected $casts = [
@@ -26,7 +28,9 @@ class Media extends Model
 
     protected $appends = [
         'is_image',
-        'url'
+        'is_video',
+        'url',
+        'poster_url'
     ];
 
     /**
@@ -52,6 +56,25 @@ class Media extends Model
     public function getIsImageAttribute()
     {
         return str_starts_with($this->mime_type, 'image/');
+    }
+
+    /**
+     * Check if file is a video
+     */
+    public function getIsVideoAttribute()
+    {
+        return str_starts_with($this->mime_type, 'video/');
+    }
+
+    /**
+     * Get the poster URL for video files
+     */
+    public function getPosterUrlAttribute()
+    {
+        if ($this->is_video && $this->poster_path && $this->poster_path !== '0') {
+            return Storage::disk('public')->url($this->poster_path);
+        }
+        return null;
     }
 
     /**
@@ -85,5 +108,13 @@ class Media extends Model
     public function scopeImages($query)
     {
         return $query->where('mime_type', 'like', 'image/%');
+    }
+
+    /**
+     * Scope for videos only
+     */
+    public function scopeVideos($query)
+    {
+        return $query->where('mime_type', 'like', 'video/%');
     }
 }
