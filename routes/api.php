@@ -8,6 +8,7 @@ use App\Http\Controllers\Api\ContactController;
 use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\WorkController;
 use App\Http\Controllers\MediaController;
+use App\Http\Controllers\VideoBannerController;
 
 /*
 |--------------------------------------------------------------------------
@@ -82,9 +83,20 @@ Route::middleware(['auth:sanctum'])->prefix('works')->group(function () {
     Route::post('/', [WorkController::class, 'store']);
     Route::get('/{id}', [WorkController::class, 'show']);
     Route::put('/{id}', [WorkController::class, 'update']);
+    Route::patch('/{id}/save-changes', [WorkController::class, 'saveChanges']); // Save changes without full recreation
     Route::delete('/{id}', [WorkController::class, 'destroy']);
     Route::patch('/{id}/publish', [WorkController::class, 'publish']);
     Route::patch('/{id}/unpublish', [WorkController::class, 'unpublish']);
+});
+
+// Video Banner management routes - Protected by authentication for CMS
+Route::middleware(['auth:sanctum'])->prefix('video-banners')->group(function () {
+    Route::get('/', [VideoBannerController::class, 'index']);
+    Route::post('/', [VideoBannerController::class, 'store']);
+    Route::get('/{id}', [VideoBannerController::class, 'show']);
+    Route::put('/{id}', [VideoBannerController::class, 'update']);
+    Route::delete('/{id}', [VideoBannerController::class, 'destroy']);
+    Route::post('/reorder', [VideoBannerController::class, 'reorder']);
 });
 
 // Public media serving route - accessible without authentication

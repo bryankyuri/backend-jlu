@@ -6,11 +6,22 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Support\Str;
 
 class Work extends Model
 {
-    use HasFactory;
+    use HasFactory, HasUuids;
+
+    /**
+     * The primary key type.
+     */
+    protected $keyType = 'string';
+
+    /**
+     * Indicates if the primary key is auto-incrementing.
+     */
+    public $incrementing = false;
 
     /**
      * The attributes that are mass assignable.

@@ -193,7 +193,7 @@ class WorkController extends Controller
     public function show(string $id): JsonResponse
     {
         try {
-            $work = Work::with(['credits.ordered', 'galleryItems.ordered'])
+            $work = Work::with(['credits', 'galleryItems'])
                 ->findOrFail($id);
 
             return response()->json([
@@ -288,6 +288,92 @@ class WorkController extends Controller
             return response()->json([
                 'success' => false,
                 'message' => 'Failed to update work',
+                'error' => config('app.debug') ? $e->getMessage() : 'Internal server error'
+            ], 500);
+        }
+    }
+
+    /**
+     * Save changes to the specified work without full recreation.
+     * This endpoint is optimized for incremental updates.
+     */
+    public function saveChanges(Request $request, string $id): JsonResponse
+    {
+        try {
+            $work = Work::findOrFail($id);
+            
+            // For saveChanges, use more flexible validation
+            $validatedData = $this->validateWorkChanges($request, $work);
+
+            DB::beginTransaction();
+
+            // Update the work main data
+            $work->update([
+                'title' => $validatedData['title'],
+                'client' => $validatedData['client'],
+                'category' => $validatedData['category'],
+                'year' => $validatedData['year'],
+                'description' => $validatedData['description'] ?? $work->description,
+                'hero_banner_image' => $validatedData['hero_banner_image'] ?? $work->hero_banner_image,
+                'video_project_src' => $validatedData['video_project_src'] ?? $work->video_project_src,
+                'video_project_poster' => $validatedData['video_project_poster'] ?? $work->video_project_poster,
+                'tags' => $validatedData['tags'] ?? $work->tags,
+                'status' => $validatedData['status'] ?? $work->status,
+                'updated_by' => Auth::id(),
+            ]);
+
+            // Update credits only if provided
+            if (isset($validatedData['credits']) && is_array($validatedData['credits'])) {
+                // Delete existing credits and recreate
+                $work->credits()->delete();
+                foreach ($validatedData['credits'] as $creditData) {
+                    WorkCredit::create([
+                        'work_id' => $work->id,
+                        'role' => $creditData['role'],
+                        'names' => $creditData['names'],
+                        'order' => $creditData['order'] ?? 0,
+                    ]);
+                }
+            }
+
+            // Update gallery items only if provided
+            if (isset($validatedData['gallery_items']) && is_array($validatedData['gallery_items'])) {
+                // Delete existing gallery items and recreate
+                $work->galleryItems()->delete();
+                foreach ($validatedData['gallery_items'] as $galleryData) {
+                    WorkGalleryItem::create([
+                        'work_id' => $work->id,
+                        'type' => $galleryData['type'],
+                        'images' => $galleryData['images'],
+                        'order' => $galleryData['order'] ?? 0,
+                    ]);
+                }
+            }
+
+            DB::commit();
+
+            // Load relationships for response
+            $work->load(['credits', 'galleryItems']);
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Changes saved successfully',
+                'data' => $work
+            ]);
+
+        } catch (ValidationException $e) {
+            DB::rollBack();
+            return response()->json([
+                'success' => false,
+                'message' => 'Validation failed',
+                'errors' => $e->errors()
+            ], 422);
+
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to save changes',
                 'error' => config('app.debug') ? $e->getMessage() : 'Internal server error'
             ], 500);
         }
@@ -424,6 +510,41 @@ class WorkController extends Controller
             $rules['video_project_src'] = 'required|string';
             $rules['credits'] = 'required|array|min:1';
         }
+
+        return $request->validate($rules);
+    }
+
+    /**
+     * Validate work changes with more flexible rules for incremental updates.
+     */
+    private function validateWorkChanges(Request $request, ?Work $work = null): array
+    {
+        $rules = [
+            'title' => 'required|string|max:255',
+            'client' => 'required|string|max:255', 
+            'category' => 'required|in:film/series,commercial',
+            'year' => 'nullable|string|size:4|regex:/^\d{4}$/',
+            'description' => 'nullable|string|max:2000',
+            'hero_banner_image' => 'nullable|string',
+            'video_project_src' => 'nullable|string',
+            'video_project_poster' => 'nullable|string',
+            'tags' => 'nullable|array',
+            'tags.*' => 'string|in:MOTION GRAPHIC,COLOR GRADING,VFX,CGI',
+            'status' => 'nullable|in:draft,published',
+            'credits' => 'nullable|array',
+            'credits.*.role' => 'required|string|max:255',
+            'credits.*.names' => 'required|array|min:1',
+            'credits.*.names.*' => 'required|string|max:255',
+            'credits.*.order' => 'nullable|integer|min:0',
+            'gallery_items' => 'nullable|array',
+            'gallery_items.*.type' => 'required|in:full-width,2col-full,2col-4:5,compare-full',
+            'gallery_items.*.images' => 'required|array|min:1',
+            'gallery_items.*.images.*' => 'required|string',
+            'gallery_items.*.order' => 'nullable|integer|min:0',
+        ];
+
+        // For saveChanges, we're more lenient - all fields are optional except title and client
+        // This allows saving partial changes without validation errors
 
         return $request->validate($rules);
     }
