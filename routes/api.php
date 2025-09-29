@@ -2,6 +2,7 @@
 
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
+use Illuminate\Support\Facades\Hash;
 use App\Http\Controllers\Api\ProjectController;
 use App\Http\Controllers\Api\TeamController;
 use App\Http\Controllers\Api\ContactController;
@@ -20,6 +21,91 @@ use App\Http\Controllers\VideoBannerController;
 | be assigned to the "api" middleware group. Make something great!
 |
 */
+
+// Simple API test routes (no controllers needed)
+Route::get('/test', function () {
+    return response()->json([
+        'status' => 'OK',
+        'message' => 'API routing is working',
+        'timestamp' => now(),
+        'method' => request()->method()
+    ]);
+});
+
+Route::post('/test', function () {
+    return response()->json([
+        'status' => 'OK',
+        'message' => 'API POST is working',
+        'timestamp' => now(),
+        'method' => request()->method(),
+        'data' => request()->all()
+    ]);
+});
+
+// Debug CORS configuration
+Route::get('/debug-cors', function () {
+    $origin = request()->header('Origin');
+    $allowedOrigins = config('cors.allowed_origins');
+    
+    return response()->json([
+        'current_origin' => $origin,
+        'allowed_origins' => $allowedOrigins,
+        'origin_allowed' => in_array($origin, $allowedOrigins),
+        'env_cors_origins' => env('CORS_ALLOWED_ORIGINS'),
+        'cors_config' => config('cors')
+    ]);
+});
+
+// Test custom CORS with POST
+Route::post('/test-custom-cors', function () {
+    return response()->json([
+        'status' => 'SUCCESS',
+        'message' => 'Custom CORS middleware is working!',
+        'origin' => request()->header('Origin'),
+        'method' => request()->method(),
+        'timestamp' => now(),
+        'data' => request()->all()
+    ]);
+});
+
+// Manual CORS test route
+Route::match(['GET', 'POST', 'OPTIONS'], '/cors-test', function () {
+    $origin = request()->header('Origin');
+    $allowedOrigins = [
+        'http://localhost:3000',
+        'http://localhost:5173',
+        'http://127.0.0.1:3000',
+        'http://127.0.0.1:5173'
+    ];
+    
+    // Handle preflight request
+    if (request()->method() === 'OPTIONS') {
+        $response = response('', 200);
+    } else {
+        $response = response()->json([
+            'status' => 'OK',
+            'message' => 'Manual CORS test working',
+            'origin' => $origin,
+            'method' => request()->method(),
+            'allowed' => in_array($origin, $allowedOrigins)
+        ]);
+    }
+    
+    // Add CORS headers manually
+    if (in_array($origin, $allowedOrigins)) {
+        $response->header('Access-Control-Allow-Origin', $origin);
+    }
+    
+    $response->header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+    $response->header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With, Origin, Accept');
+    $response->header('Access-Control-Allow-Credentials', 'true');
+    
+    if (request()->method() === 'OPTIONS') {
+        $response->header('Access-Control-Max-Age', '86400');
+    }
+    
+    return $response;
+});
 
 // Authentication routes
 Route::prefix('auth')->group(function () {
@@ -150,4 +236,130 @@ Route::get('/health', function () {
         'message' => 'Parallel Studio API is running',
         'version' => app()->version()
     ]);
+});
+
+// CORS test endpoint
+Route::get('/test-cors', function () {
+    return response()->json([
+        'status' => 'OK',
+        'message' => 'CORS is working properly',
+        'timestamp' => now(),
+        'origin' => request()->header('Origin'),
+        'method' => request()->method(),
+        'cors_config' => [
+            'allowed_origins' => config('cors.allowed_origins'),
+            'allowed_methods' => config('cors.allowed_methods'),
+            'supports_credentials' => config('cors.supports_credentials')
+        ]
+    ]);
+});
+
+// Simple CORS test with manual headers
+Route::match(['GET', 'POST', 'OPTIONS'], '/cors-manual-test', function () {
+    $origin = request()->header('Origin');
+    $allowedOrigins = [
+        'http://localhost:3000',
+        'http://localhost:5173',
+        'http://127.0.0.1:3000',
+        'http://127.0.0.1:5173'
+    ];
+    
+    $response = response()->json([
+        'status' => 'OK',
+        'message' => 'Manual CORS test',
+        'origin' => $origin,
+        'method' => request()->method(),
+        'allowed' => in_array($origin, $allowedOrigins)
+    ]);
+    
+    // Add CORS headers manually
+    if (in_array($origin, $allowedOrigins)) {
+        $response->header('Access-Control-Allow-Origin', $origin);
+    }
+    
+    $response->header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+    $response->header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With, Origin, Accept');
+    $response->header('Access-Control-Allow-Credentials', 'true');
+    
+    if (request()->method() === 'OPTIONS') {
+        $response->header('Access-Control-Max-Age', '86400');
+    }
+    
+    return $response;
+});
+
+// Test login endpoint without captcha (for development)
+Route::post('/test-login-no-captcha', function(Request $request) {
+    try {
+        $email = $request->input('email');
+        $password = $request->input('password');
+        
+        if (!$email || !$password) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Email and password are required'
+            ], 400);
+        }
+        
+        $user = \App\Models\User::where('email', $email)->first();
+        
+        if (!$user || !Hash::check($password, $user->password)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Invalid credentials'
+            ], 401);
+        }
+        
+        $token = $user->createToken('test-token')->plainTextToken;
+        
+        return response()->json([
+            'success' => true,
+            'message' => 'Test login successful (no captcha)',
+            'data' => [
+                'user' => [
+                    'id' => $user->id,
+                    'name' => $user->name,
+                    'email' => $user->email,
+                ],
+                'token' => $token
+            ]
+        ]);
+        
+    } catch (\Exception $e) {
+        return response()->json([
+            'success' => false,
+            'message' => 'Login failed: ' . $e->getMessage()
+        ], 500);
+    }
+});
+
+// Debug media files endpoint
+Route::get('/debug-media', function() {
+    try {
+        $media = \App\Models\Media::all();
+        $results = [];
+        
+        foreach ($media as $item) {
+            $exists = Storage::disk('public')->exists($item->path);
+            $results[] = [
+                'id' => $item->id,
+                'filename' => $item->filename,
+                'path' => $item->path,
+                'exists' => $exists,
+                'url' => $item->url,
+                'full_path' => storage_path('app/public/' . $item->path)
+            ];
+        }
+        
+        return response()->json([
+            'total_media' => count($media),
+            'storage_path' => storage_path('app/public'),
+            'media_files' => $results
+        ]);
+        
+    } catch (\Exception $e) {
+        return response()->json([
+            'error' => $e->getMessage()
+        ], 500);
+    }
 });

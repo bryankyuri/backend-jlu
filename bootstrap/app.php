@@ -12,6 +12,11 @@ return Application::configure(basePath: dirname(__DIR__))
         health: '/up',
     )
     ->withMiddleware(function (Middleware $middleware) {
+        // Create custom CORS middleware that actually works
+        $middleware->api(prepend: [
+            \App\Http\Middleware\CustomCors::class,
+        ]);
+        
         // Remove the stateful middleware for API-only authentication
         // $middleware->api(prepend: [
         //     \Laravel\Sanctum\Http\Middleware\EnsureFrontendRequestsAreStateful::class,
