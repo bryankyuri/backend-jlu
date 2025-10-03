@@ -35,4 +35,14 @@ return [
         ],
     ],
 
+    'google_analytics' => [
+        'view_id' => env('GOOGLE_ANALYTICS_VIEW_ID'),
+        'project_id' => env('GOOGLE_ANALYTICS_PROJECT_ID'),
+        'service_account_path' => env('GOOGLE_SERVICE_ACCOUNT_PATH'),
+        'client_email' => env('GOOGLE_SERVICE_ACCOUNT_EMAIL'),
+        'client_id' => env('GOOGLE_SERVICE_ACCOUNT_CLIENT_ID'),
+        'private_key_id' => env('GOOGLE_SERVICE_ACCOUNT_KEY_ID'),
+        'private_key' => env('GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY'),
+    ],
+
 ];

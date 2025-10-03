@@ -316,4 +316,47 @@ class VideoBannerController extends Controller
             ], 500);
         }
     }
+
+    /**
+     * Get video banners for public display (no authentication required)
+     */
+    public function getPublicBanners(): JsonResponse
+    {
+        try {
+            $banners = VideoBanner::with(['work:id,title,client,tags'])
+                ->active()
+                ->ordered()
+                ->get()
+                ->map(function ($banner) {
+                    return [
+                        'id' => $banner->id,
+                        'work_id' => $banner->work_id,
+                        'title' => $banner->work->title ?? 'Untitled Project',
+                        'client' => $banner->work->client ?? 'Unknown Client',
+                        'categories' => $banner->work->tags ?? [],
+                        'video_url' => $banner->video_url,
+                        'video_thumbnail' => $banner->video_thumbnail,
+                        'is_custom_video' => $banner->is_custom_video,
+                        'position' => $banner->position,
+                    ];
+                });
+
+            return response()->json([
+                'success' => true,
+                'data' => $banners,
+                'count' => $banners->count(),
+                'message' => 'Video banners retrieved successfully'
+            ]);
+
+        } catch (\Exception $e) {
+            \Log::error('Failed to retrieve public video banners: ' . $e->getMessage());
+            
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to retrieve video banners',
+                'data' => [],
+                'count' => 0
+            ], 500);
+        }
+    }
 }

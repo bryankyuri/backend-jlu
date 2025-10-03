@@ -73,7 +73,7 @@ class Work extends Model
         // Auto-generate slug when creating
         static::creating(function ($work) {
             if (empty($work->slug)) {
-                $work->slug = Str::slug($work->title);
+                $work->slug = static::generateUniqueSlug($work->title);
             }
             
             // Set published_at timestamp if status is published
@@ -85,7 +85,7 @@ class Work extends Model
         // Update slug and published_at when updating
         static::updating(function ($work) {
             if ($work->isDirty('title') && empty($work->slug)) {
-                $work->slug = Str::slug($work->title);
+                $work->slug = static::generateUniqueSlug($work->title, $work->id);
             }
             
             // Set published_at when status changes to published
@@ -98,6 +98,37 @@ class Work extends Model
                 $work->published_at = null;
             }
         });
+    }
+
+    /**
+     * Generate a unique slug for the work.
+     */
+    private static function generateUniqueSlug($title, $excludeId = null)
+    {
+        $slug = Str::slug($title);
+        $originalSlug = $slug;
+        $counter = 1;
+
+        while (static::slugExists($slug, $excludeId)) {
+            $slug = $originalSlug . '-' . $counter;
+            $counter++;
+        }
+
+        return $slug;
+    }
+
+    /**
+     * Check if a slug already exists.
+     */
+    private static function slugExists($slug, $excludeId = null)
+    {
+        $query = static::where('slug', $slug);
+        
+        if ($excludeId) {
+            $query->where('id', '!=', $excludeId);
+        }
+        
+        return $query->exists();
     }
 
     /**

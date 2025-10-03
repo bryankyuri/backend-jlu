@@ -3,11 +3,12 @@
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Facades\Hash;
-use App\Http\Controllers\Api\ProjectController;
-use App\Http\Controllers\Api\TeamController;
-use App\Http\Controllers\Api\ContactController;
-use App\Http\Controllers\Api\AuthController;
-use App\Http\Controllers\Api\WorkController;
+use App\Http\Controllers\API\ProjectController;
+use App\Http\Controllers\API\TeamController;
+use App\Http\Controllers\API\ContactController;
+use App\Http\Controllers\API\AuthController;
+use App\Http\Controllers\API\WorkController;
+use App\Http\Controllers\API\AnalyticsController;
 use App\Http\Controllers\MediaController;
 use App\Http\Controllers\VideoBannerController;
 
@@ -185,6 +186,12 @@ Route::middleware(['auth:sanctum'])->prefix('video-banners')->group(function () 
     Route::post('/reorder', [VideoBannerController::class, 'reorder']);
 });
 
+// Analytics routes - protected by authentication
+Route::middleware(['auth:sanctum'])->prefix('analytics')->group(function () {
+    Route::get('/dashboard', [AnalyticsController::class, 'getDashboardData']);
+    Route::post('/clear-cache', [AnalyticsController::class, 'clearCache']);
+});
+
 // Public media serving route - accessible without authentication
 Route::get('/media/serve/{filename}', [MediaController::class, 'serve'])
     ->name('media.serve');
@@ -214,6 +221,21 @@ Route::prefix('v1')->group(function () {
     
     // Contact endpoints
     Route::post('/contact', [ContactController::class, 'store']);
+    
+    // Video Banners endpoints (public access)
+    Route::get('/video-banners', [VideoBannerController::class, 'getPublicBanners']);
+    
+    // Public Works API with filtering, search, sorting, and pagination
+    Route::get('/works-list', [WorkController::class, 'getPublicWorks']);
+    
+    // Public Work Detail API (published works only)
+    Route::get('/works-detail/{id}', [WorkController::class, 'getPublicWorkDetail']);
+    
+    // Related Works API (published works with tag/category matching)
+    Route::get('/works-related/{id}', [WorkController::class, 'getRelatedPublicWorks']);
+    
+    // Latest Works API (published works sorted by year and updated_at)
+    Route::get('/works-latest', [WorkController::class, 'getLatestPublicWorks']);
     
     // Services/Categories endpoints
     Route::get('/services', function() {

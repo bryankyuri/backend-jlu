@@ -1,6 +1,6 @@
 <?php
 
-namespace App\Http\Controllers\Api;
+namespace App\Http\Controllers\API;
 
 use App\Http\Controllers\Controller;
 use App\Models\Work;
@@ -547,5 +547,584 @@ class WorkController extends Controller
         // This allows saving partial changes without validation errors
 
         return $request->validate($rules);
+    }
+
+    /**
+     * Get published works for public display (no authentication required)
+     * Supports search, filtering by tags/categories, sorting, and pagination
+     */
+    public function getPublicWorks(Request $request): JsonResponse
+    {
+        try {
+            $query = Work::with(['credits', 'galleryItems'])
+                ->where('status', 'published')
+                ->whereNotNull('published_at');
+
+            // Search functionality
+            if ($request->filled('search')) {
+                $search = $request->input('search');
+                $query->where(function ($q) use ($search) {
+                    $q->where('title', 'like', "%{$search}%")
+                      ->orWhere('client', 'like', "%{$search}%")
+                      ->orWhere('description', 'like', "%{$search}%");
+                });
+            }
+
+            // Filter by tags (support multiple values)
+            if ($request->filled('tags')) {
+                $tags = $request->input('tags');
+                // Convert string to array if needed
+                if (is_string($tags)) {
+                    $tags = explode(',', $tags);
+                }
+                $tags = array_filter($tags);
+                
+                if (!empty($tags)) {
+                    $query->where(function ($q) use ($tags) {
+                        foreach ($tags as $tag) {
+                            $q->orWhereJsonContains('tags', trim($tag));
+                        }
+                    });
+                }
+            }
+
+            // Filter by categories (support multiple values)
+            if ($request->filled('categories')) {
+                $categories = $request->input('categories');
+                // Convert string to array if needed
+                if (is_string($categories)) {
+                    $categories = explode(',', $categories);
+                }
+                $categories = array_filter($categories);
+                
+                if (!empty($categories)) {
+                    $query->whereIn('category', $categories);
+                }
+            }
+
+            // Filter by single category (for backward compatibility)
+            if ($request->filled('category') && $request->input('category') !== 'all') {
+                $query->where('category', $request->input('category'));
+            }
+
+            // Filter by year
+            if ($request->filled('year')) {
+                $query->where('year', $request->input('year'));
+            }
+
+            // Filter by client
+            if ($request->filled('client')) {
+                $query->where('client', 'like', "%{$request->input('client')}%");
+            }
+
+            // Apply sorting
+            $sortBy = $request->input('sort_by', 'published_at');
+            $sortDirection = $request->input('sort_direction', 'desc');
+            
+            // Validate sort column for security
+            $allowedSortColumns = [
+                'published_at', 'created_at', 'updated_at', 'title', 
+                'client', 'year', 'category', 'display_order'
+            ];
+            
+            if (!in_array($sortBy, $allowedSortColumns)) {
+                $sortBy = 'published_at';
+            }
+            
+            if (!in_array(strtolower($sortDirection), ['asc', 'desc'])) {
+                $sortDirection = 'desc';
+            }
+            
+            $query->orderBy($sortBy, $sortDirection);
+
+            // Pagination
+            $perPage = min((int) $request->input('per_page', 12), 50); // Max 50 per page
+            $page = (int) $request->input('page', 1);
+            
+            $works = $query->paginate($perPage, ['*'], 'page', $page);
+
+            // Format the response data
+            $formattedWorks = $works->map(function ($work) {
+                return [
+                    'id' => $work->id,
+                    'title' => $work->title,
+                    'client' => $work->client,
+                    'category' => $work->category,
+                    'year' => $work->year,
+                    'description' => $work->description,
+                    'slug' => $work->slug,
+                    'hero_banner_image' => $work->hero_banner_image,
+                    'video_project_src' => $work->video_project_src,
+                    'video_project_poster' => $work->video_project_poster,
+                    'tags' => $work->tags ?? [],
+                    'published_at' => $work->published_at?->toISOString(),
+                    'display_order' => $work->display_order,
+                    'credits_count' => $work->credits ? $work->credits->count() : 0,
+                    'gallery_items_count' => $work->galleryItems ? $work->galleryItems->count() : 0,
+                ];
+            });
+
+            // Get unique values for filtering
+            $filterData = $this->getPublicFilterData();
+
+            return response()->json([
+                'success' => true,
+                'data' => $formattedWorks,
+                'meta' => [
+                    'current_page' => $works->currentPage(),
+                    'per_page' => $works->perPage(),
+                    'total' => $works->total(),
+                    'last_page' => $works->lastPage(),
+                    'from' => $works->firstItem(),
+                    'to' => $works->lastItem(),
+                ],
+                'filters' => $filterData,
+                'applied_filters' => [
+                    'search' => $request->input('search'),
+                    'tags' => $request->input('tags'),
+                    'categories' => $request->input('categories'),
+                    'category' => $request->input('category'),
+                    'year' => $request->input('year'),
+                    'client' => $request->input('client'),
+                    'sort_by' => $sortBy,
+                    'sort_direction' => $sortDirection,
+                ],
+                'message' => 'Works retrieved successfully'
+            ]);
+
+        } catch (\Exception $e) {
+            \Log::error('Failed to retrieve public works: ' . $e->getMessage());
+            
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to retrieve works',
+                'data' => [],
+                'meta' => [
+                    'current_page' => 1,
+                    'per_page' => 12,
+                    'total' => 0,
+                    'last_page' => 1,
+                ],
+            ], 500);
+        }
+    }
+
+    /**
+     * Get related works based on tags and category match (no authentication required)
+     * Returns published works that share tags or category with the specified work
+     */
+    public function getRelatedPublicWorks(string $id, Request $request): JsonResponse
+    {
+        try {
+            // First, get the reference work to match against
+            $referenceWork = Work::where('status', 'published')
+                ->whereNotNull('published_at')
+                ->findOrFail($id);
+
+            $query = Work::where('status', 'published')
+                ->whereNotNull('published_at')
+                ->where('id', '!=', $id); // Exclude the reference work itself
+
+            // Build scoring system for relevance
+            $query->selectRaw('*, 
+                CASE 
+                    WHEN category = ? THEN 10 
+                    ELSE 0 
+                END as category_score', [$referenceWork->category]);
+
+            // Add tag matching score if reference work has tags
+            if (!empty($referenceWork->tags) && is_array($referenceWork->tags)) {
+                $tagConditions = [];
+                $tagBindings = [];
+                
+                foreach ($referenceWork->tags as $index => $tag) {
+                    $tagConditions[] = "JSON_CONTAINS(tags, ?)";
+                    $tagBindings[] = json_encode($tag);
+                }
+                
+                if (!empty($tagConditions)) {
+                    $tagConditionString = implode(' + ', array_map(function($condition) {
+                        return "CASE WHEN {$condition} THEN 1 ELSE 0 END";
+                    }, $tagConditions));
+                    
+                    $query->selectRaw("*, 
+                        CASE 
+                            WHEN category = ? THEN 10 
+                            ELSE 0 
+                        END + ({$tagConditionString}) as relevance_score", 
+                        array_merge([$referenceWork->category], $tagBindings)
+                    );
+                }
+            }
+
+            // Filter by category OR shared tags
+            $query->where(function ($q) use ($referenceWork) {
+                // Match by category
+                $q->where('category', $referenceWork->category);
+                
+                // OR match by tags if reference work has tags
+                if (!empty($referenceWork->tags) && is_array($referenceWork->tags)) {
+                    $q->orWhere(function ($tagQuery) use ($referenceWork) {
+                        foreach ($referenceWork->tags as $tag) {
+                            $tagQuery->orWhereJsonContains('tags', $tag);
+                        }
+                    });
+                }
+            });
+
+            // Apply sorting and pagination
+            $limit = min((int) $request->input('limit', 8), 20); // Max 20 related works
+            $sortBy = $request->input('sort_by', 'relevance'); // Default to relevance
+            
+            if ($sortBy === 'relevance') {
+                $query->orderByRaw('relevance_score DESC, published_at DESC');
+            } elseif ($sortBy === 'latest') {
+                $query->orderBy('published_at', 'desc');
+            } elseif ($sortBy === 'year') {
+                $query->orderBy('year', 'desc')->orderBy('published_at', 'desc');
+            } else {
+                // Default fallback
+                $query->orderBy('published_at', 'desc');
+            }
+
+            $relatedWorks = $query->limit($limit)->get();
+
+            // Format the response data
+            $formattedWorks = $relatedWorks->map(function ($work) use ($referenceWork) {
+                // Calculate match details
+                $categoryMatch = $work->category === $referenceWork->category;
+                $tagMatches = [];
+                
+                if (!empty($referenceWork->tags) && !empty($work->tags)) {
+                    $tagMatches = array_intersect($referenceWork->tags, $work->tags);
+                }
+
+                return [
+                    'id' => $work->id,
+                    'title' => $work->title,
+                    'client' => $work->client,
+                    'category' => $work->category,
+                    'year' => $work->year,
+                    'description' => $work->description,
+                    'slug' => $work->slug,
+                    'hero_banner_image' => $work->hero_banner_image,
+                    'video_project_src' => $work->video_project_src,
+                    'video_project_poster' => $work->video_project_poster,
+                    'tags' => $work->tags ?? [],
+                    'published_at' => $work->published_at?->toISOString(),
+                    'display_order' => $work->display_order,
+                    'match_info' => [
+                        'category_match' => $categoryMatch,
+                        'shared_tags' => array_values($tagMatches),
+                        'shared_tags_count' => count($tagMatches),
+                        'relevance_score' => $work->relevance_score ?? 0,
+                    ],
+                ];
+            });
+
+            // Group results by match type for better organization
+            $categorizedResults = [
+                'same_category' => $formattedWorks->filter(function ($work) {
+                    return $work['match_info']['category_match'];
+                })->values(),
+                'shared_tags' => $formattedWorks->filter(function ($work) {
+                    return !$work['match_info']['category_match'] && $work['match_info']['shared_tags_count'] > 0;
+                })->values(),
+                'other_related' => $formattedWorks->filter(function ($work) {
+                    return !$work['match_info']['category_match'] && $work['match_info']['shared_tags_count'] === 0;
+                })->values(),
+            ];
+
+            return response()->json([
+                'success' => true,
+                'data' => $formattedWorks,
+                'categorized' => $categorizedResults,
+                'reference_work' => [
+                    'id' => $referenceWork->id,
+                    'title' => $referenceWork->title,
+                    'category' => $referenceWork->category,
+                    'tags' => $referenceWork->tags ?? [],
+                ],
+                'meta' => [
+                    'total_found' => $relatedWorks->count(),
+                    'limit' => $limit,
+                    'sort_by' => $sortBy,
+                    'same_category_count' => $categorizedResults['same_category']->count(),
+                    'shared_tags_count' => $categorizedResults['shared_tags']->count(),
+                    'other_related_count' => $categorizedResults['other_related']->count(),
+                ],
+                'message' => 'Related works retrieved successfully'
+            ]);
+
+        } catch (\Illuminate\Database\Eloquent\ModelNotFoundException $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Reference work not found or not published',
+                'data' => [],
+                'categorized' => [
+                    'same_category' => [],
+                    'shared_tags' => [],
+                    'other_related' => [],
+                ],
+            ], 404);
+        } catch (\Exception $e) {
+            \Log::error('Failed to retrieve related public works: ' . $e->getMessage());
+            
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to retrieve related works',
+                'data' => [],
+                'categorized' => [
+                    'same_category' => [],
+                    'shared_tags' => [],
+                    'other_related' => [],
+                ],
+                'error' => config('app.debug') ? $e->getMessage() : 'Internal server error'
+            ], 500);
+        }
+    }
+
+    /**
+     * Get latest published works sorted by year and updated_at (no authentication required)
+     * Returns only works with status 'published' and published_at set
+     */
+    public function getLatestPublicWorks(Request $request): JsonResponse
+    {
+        try {
+            $query = Work::with(['credits', 'galleryItems'])
+                ->where('status', 'published')
+                ->whereNotNull('published_at');
+
+            // Apply sorting by year (desc) then by updated_at (desc)
+            $query->orderBy('year', 'desc')
+                  ->orderBy('updated_at', 'desc');
+
+            // Pagination with configurable limit
+            $perPage = min((int) $request->input('per_page', 12), 50); // Max 50 per page
+            $page = (int) $request->input('page', 1);
+            
+            $works = $query->paginate($perPage, ['*'], 'page', $page);
+
+            // Format the response data
+            $formattedWorks = $works->map(function ($work) {
+                return [
+                    'id' => $work->id,
+                    'title' => $work->title,
+                    'client' => $work->client,
+                    'category' => $work->category,
+                    'year' => $work->year,
+                    'description' => $work->description,
+                    'slug' => $work->slug,
+                    'hero_banner_image' => $work->hero_banner_image,
+                    'video_project_src' => $work->video_project_src,
+                    'video_project_poster' => $work->video_project_poster,
+                    'tags' => $work->tags ?? [],
+                    'published_at' => $work->published_at?->toISOString(),
+                    'updated_at' => $work->updated_at?->toISOString(),
+                    'display_order' => $work->display_order,
+                    'credits_count' => $work->credits ? $work->credits->count() : 0,
+                    'gallery_items_count' => $work->galleryItems ? $work->galleryItems->count() : 0,
+                ];
+            });
+
+            return response()->json([
+                'success' => true,
+                'data' => $formattedWorks,
+                'meta' => [
+                    'current_page' => $works->currentPage(),
+                    'per_page' => $works->perPage(),
+                    'total' => $works->total(),
+                    'last_page' => $works->lastPage(),
+                    'from' => $works->firstItem(),
+                    'to' => $works->lastItem(),
+                ],
+                'sorting' => [
+                    'primary' => 'year (desc)',
+                    'secondary' => 'updated_at (desc)',
+                    'description' => 'Latest works sorted by newest year first, then by most recently updated'
+                ],
+                'message' => 'Latest works retrieved successfully'
+            ]);
+
+        } catch (\Exception $e) {
+            \Log::error('Failed to retrieve latest public works: ' . $e->getMessage());
+            
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to retrieve latest works',
+                'data' => [],
+                'meta' => [
+                    'current_page' => 1,
+                    'per_page' => 12,
+                    'total' => 0,
+                    'last_page' => 1,
+                ],
+            ], 500);
+        }
+    }
+
+    /**
+     * Get published work details for public display (no authentication required)
+     * Only returns works with status 'published' and published_at set
+     */
+    public function getPublicWorkDetail(string $id): JsonResponse
+    {
+        try {
+            $work = Work::with(['credits', 'galleryItems'])
+                ->where('status', 'published')
+                ->whereNotNull('published_at')
+                ->findOrFail($id);
+
+            // Format the work data for public consumption
+            $formattedWork = [
+                'id' => $work->id,
+                'title' => $work->title,
+                'client' => $work->client,
+                'category' => $work->category,
+                'year' => $work->year,
+                'description' => $work->description,
+                'slug' => $work->slug,
+                'hero_banner_image' => $work->hero_banner_image,
+                'video_project_src' => $work->video_project_src,
+                'video_project_poster' => $work->video_project_poster,
+                'tags' => $work->tags ?? [],
+                'published_at' => $work->published_at?->toISOString(),
+                'display_order' => $work->display_order,
+                'credits' => $work->credits ? $work->credits->map(function ($credit) {
+                    return [
+                        'id' => $credit->id,
+                        'role' => $credit->role,
+                        'name' => $credit->name,
+                        'work_id' => $credit->work_id,
+                    ];
+                }) : [],
+                'gallery_items' => $work->galleryItems ? $work->galleryItems->map(function ($item) {
+                    return [
+                        'id' => $item->id,
+                        'type' => $item->type,
+                        'src' => $item->src,
+                        'alt' => $item->alt,
+                        'caption' => $item->caption,
+                        'display_order' => $item->display_order,
+                        'work_id' => $item->work_id,
+                    ];
+                }) : [],
+                'credits_count' => $work->credits ? $work->credits->count() : 0,
+                'gallery_items_count' => $work->galleryItems ? $work->galleryItems->count() : 0,
+            ];
+
+            // Get related works (same category, published, excluding current work)
+            $relatedWorks = Work::where('category', $work->category)
+                ->where('status', 'published')
+                ->whereNotNull('published_at')
+                ->where('id', '!=', $work->id)
+                ->orderBy('published_at', 'desc')
+                ->limit(4)
+                ->get(['id', 'title', 'client', 'hero_banner_image', 'slug', 'category'])
+                ->map(function ($relatedWork) {
+                    return [
+                        'id' => $relatedWork->id,
+                        'title' => $relatedWork->title,
+                        'client' => $relatedWork->client,
+                        'hero_banner_image' => $relatedWork->hero_banner_image,
+                        'slug' => $relatedWork->slug,
+                        'category' => $relatedWork->category,
+                    ];
+                });
+
+            return response()->json([
+                'success' => true,
+                'data' => $formattedWork,
+                'related_works' => $relatedWorks,
+                'message' => 'Work details retrieved successfully'
+            ]);
+
+        } catch (\Illuminate\Database\Eloquent\ModelNotFoundException $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Work not found or not published',
+                'data' => null,
+                'related_works' => []
+            ], 404);
+        } catch (\Exception $e) {
+            \Log::error('Failed to retrieve public work detail: ' . $e->getMessage());
+            
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to retrieve work details',
+                'data' => null,
+                'related_works' => [],
+                'error' => config('app.debug') ? $e->getMessage() : 'Internal server error'
+            ], 500);
+        }
+    }
+
+    /**
+     * Get filter data for public works (categories, tags, years, etc.)
+     */
+    private function getPublicFilterData(): array
+    {
+        try {
+            $publishedWorks = Work::where('status', 'published')
+                ->whereNotNull('published_at')
+                ->get();
+
+            // Get unique categories
+            $categories = $publishedWorks->pluck('category')
+                ->filter()
+                ->unique()
+                ->values()
+                ->sort()
+                ->all();
+
+            // Get unique tags
+            $allTags = $publishedWorks->pluck('tags')
+                ->filter()
+                ->flatten()
+                ->unique()
+                ->values()
+                ->sort()
+                ->all();
+
+            // Get unique years
+            $years = $publishedWorks->pluck('year')
+                ->filter()
+                ->unique()
+                ->values()
+                ->sort()
+                ->reverse()
+                ->all();
+
+            // Get unique clients
+            $clients = $publishedWorks->pluck('client')
+                ->filter()
+                ->unique()
+                ->values()
+                ->sort()
+                ->all();
+
+            return [
+                'categories' => $categories,
+                'tags' => $allTags,
+                'years' => $years,
+                'clients' => $clients,
+                'sort_options' => [
+                    ['value' => 'published_at', 'label' => 'Published Date'],
+                    ['value' => 'title', 'label' => 'Title'],
+                    ['value' => 'client', 'label' => 'Client'],
+                    ['value' => 'year', 'label' => 'Year'],
+                    ['value' => 'category', 'label' => 'Category'],
+                ],
+            ];
+        } catch (\Exception $e) {
+            \Log::error('Failed to get filter data: ' . $e->getMessage());
+            return [
+                'categories' => [],
+                'tags' => [],
+                'years' => [],
+                'clients' => [],
+                'sort_options' => [],
+            ];
+        }
     }
 }

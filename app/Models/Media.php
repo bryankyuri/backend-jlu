@@ -38,8 +38,28 @@ class Media extends Model
      */
     public function getUrlAttribute()
     {
+        // Get the base URL based on environment
+        $baseUrl = $this->getBaseUrl();
+        
         // Return direct public URL for better performance and public access
-        return Storage::disk('public')->url($this->path);
+        return $baseUrl . '/storage/' . $this->path;
+    }
+
+    /**
+     * Get the base URL based on environment
+     */
+    private function getBaseUrl()
+    {
+        $env = config('app.env');
+        
+        switch ($env) {
+            case 'production':
+                return 'https://api.parallelstudio.asia';
+            case 'staging':
+                return 'https://staging-api.parallelstudio.asia';
+            default:
+                return config('app.url');
+        }
     }
 
     /**
@@ -72,7 +92,9 @@ class Media extends Model
     public function getPosterUrlAttribute()
     {
         if ($this->is_video && $this->poster_path && $this->poster_path !== '0') {
-            return Storage::disk('public')->url($this->poster_path);
+            // Get the base URL based on environment
+            $baseUrl = $this->getBaseUrl();
+            return $baseUrl . '/storage/' . $this->poster_path;
         }
         return null;
     }
