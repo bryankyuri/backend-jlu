@@ -36,13 +36,16 @@ return [
     ],
 
     'google_analytics' => [
+        'property_id' => env('GOOGLE_ANALYTICS_PROPERTY_ID'),
         'view_id' => env('GOOGLE_ANALYTICS_VIEW_ID'),
         'project_id' => env('GOOGLE_ANALYTICS_PROJECT_ID'),
-        'service_account_path' => env('GOOGLE_SERVICE_ACCOUNT_PATH'),
+        'service_account_path' => env('GOOGLE_SERVICE_ACCOUNT_PATH', 'storage/app/google/service-account.json'),
         'client_email' => env('GOOGLE_SERVICE_ACCOUNT_EMAIL'),
         'client_id' => env('GOOGLE_SERVICE_ACCOUNT_CLIENT_ID'),
         'private_key_id' => env('GOOGLE_SERVICE_ACCOUNT_KEY_ID'),
         'private_key' => env('GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY'),
+        'cache_lifetime' => env('GOOGLE_ANALYTICS_CACHE_LIFETIME', 3600),
+        'enabled' => env('GOOGLE_ANALYTICS_ENABLED', true),
     ],
 
 ];

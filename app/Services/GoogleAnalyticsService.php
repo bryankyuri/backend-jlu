@@ -3,39 +3,38 @@
 namespace App\Services;
 
 use Google\Client;
-use Google\Service\AnalyticsReporting;
-use Google\Service\AnalyticsReporting\DateRange;
-use Google\Service\AnalyticsReporting\Metric;
-use Google\Service\AnalyticsReporting\Dimension;
-use Google\Service\AnalyticsReporting\ReportRequest;
-use Google\Service\AnalyticsReporting\GetReportsRequest;
+use Google\Analytics\Data\V1beta\Client\BetaAnalyticsDataClient;
+use Google\Analytics\Data\V1beta\RunReportRequest;
+use Google\Analytics\Data\V1beta\DateRange;
+use Google\Analytics\Data\V1beta\Metric;
+use Google\Analytics\Data\V1beta\Dimension;
+use Google\Analytics\Data\V1beta\OrderBy;
+use Google\Analytics\Data\V1beta\OrderBy\MetricOrderBy;
+use Google\Analytics\Data\V1beta\OrderBy\DimensionOrderBy;
 use Exception;
 use Illuminate\Support\Facades\Cache;
-use Illuminate\Support\Facades\Log;
 
 class GoogleAnalyticsService
 {
     private $client;
     private $analytics;
-    private $viewId;
+    private $propertyId;
 
     public function __construct()
     {
         $this->initializeClient();
-        $this->viewId = config('services.google_analytics.view_id');
+        $this->propertyId = 'properties/' . config('services.google_analytics.property_id');
     }
 
     private function initializeClient()
     {
         try {
-            $this->client = new Client();
-            $this->client->setApplicationName(config('app.name'));
-            $this->client->setScopes(['https://www.googleapis.com/auth/analytics.readonly']);
-            
             // Use service account credentials
             $credentialsPath = config('services.google_analytics.service_account_path');
             if ($credentialsPath && file_exists($credentialsPath)) {
-                $this->client->setAuthConfig($credentialsPath);
+                $this->analytics = new BetaAnalyticsDataClient([
+                    'credentials' => $credentialsPath
+                ]);
             } else {
                 // Use environment variables if no file
                 $credentials = [
@@ -48,12 +47,14 @@ class GoogleAnalyticsService
                     'auth_uri' => 'https://accounts.google.com/o/oauth2/auth',
                     'token_uri' => 'https://oauth2.googleapis.com/token',
                 ];
-                $this->client->setAuthConfig($credentials);
+                
+                $this->analytics = new BetaAnalyticsDataClient([
+                    'credentials' => $credentials
+                ]);
             }
-
-            $this->analytics = new AnalyticsReporting($this->client);
         } catch (Exception $e) {
-            Log::error('Google Analytics initialization failed: ' . $e->getMessage());
+            // Remove Log facade usage to avoid facade errors
+            error_log('Google Analytics initialization failed: ' . $e->getMessage());
             throw $e;
         }
     }
@@ -85,7 +86,7 @@ class GoogleAnalyticsService
                     'lastUpdated' => now()->toISOString()
                 ];
             } catch (Exception $e) {
-                Log::error('Failed to fetch analytics data: ' . $e->getMessage());
+                error_log('Failed to fetch analytics data: ' . $e->getMessage());
                 return $this->getFallbackData();
             }
         });
@@ -106,79 +107,76 @@ class GoogleAnalyticsService
 
     private function getBasicMetrics($dateRange)
     {
-        $dateRangeObj = new DateRange();
-        $dateRangeObj->setStartDate($dateRange['startDate']);
-        $dateRangeObj->setEndDate($dateRange['endDate']);
+        $request = new RunReportRequest([
+            'property' => $this->propertyId,
+            'date_ranges' => [
+                new DateRange([
+                    'start_date' => $dateRange['startDate'],
+                    'end_date' => $dateRange['endDate'],
+                ])
+            ],
+            'metrics' => [
+                new Metric(['name' => 'activeUsers']),
+                new Metric(['name' => 'screenPageViews']),
+                new Metric(['name' => 'sessions']),
+                new Metric(['name' => 'bounceRate']),
+                new Metric(['name' => 'averageSessionDuration']),
+            ]
+        ]);
 
-        $metrics = [
-            new Metric(['expression' => 'ga:users']),
-            new Metric(['expression' => 'ga:pageviews']),
-            new Metric(['expression' => 'ga:sessions']),
-            new Metric(['expression' => 'ga:bounceRate']),
-            new Metric(['expression' => 'ga:avgSessionDuration']),
-        ];
-
-        $request = new ReportRequest();
-        $request->setViewId($this->viewId);
-        $request->setDateRanges($dateRangeObj);
-        $request->setMetrics($metrics);
-
-        $body = new GetReportsRequest();
-        $body->setReportRequests([$request]);
-
-        $response = $this->analytics->reports->batchGet($body);
-        $report = $response->getReports()[0];
-        $rows = $report->getData()->getRows();
-
-        if (empty($rows)) {
+        $response = $this->analytics->runReport($request);
+        
+        if (!$response->getRows() || count($response->getRows()) === 0) {
             return [];
         }
 
-        $values = $rows[0]->getMetrics()[0]->getValues();
+        $row = $response->getRows()[0];
+        $metricValues = $row->getMetricValues();
         
         return [
-            'users' => (int) $values[0],
-            'pageviews' => (int) $values[1],
-            'sessions' => (int) $values[2],
-            'bounceRate' => round($values[3], 2) . '%',
-            'avgSessionDuration' => $this->formatDuration($values[4])
+            'users' => (int) $metricValues[0]->getValue(),
+            'pageviews' => (int) $metricValues[1]->getValue(),
+            'sessions' => (int) $metricValues[2]->getValue(),
+            'bounceRate' => round($metricValues[3]->getValue() * 100, 2) . '%',
+            'avgSessionDuration' => $this->formatDuration($metricValues[4]->getValue())
         ];
     }
 
     private function getTopPages($dateRange)
     {
-        $dateRangeObj = new DateRange();
-        $dateRangeObj->setStartDate($dateRange['startDate']);
-        $dateRangeObj->setEndDate($dateRange['endDate']);
-
-        $metrics = [new Metric(['expression' => 'ga:pageviews'])];
-        $dimensions = [new Dimension(['name' => 'ga:pagePath'])];
-
-        $request = new ReportRequest();
-        $request->setViewId($this->viewId);
-        $request->setDateRanges($dateRangeObj);
-        $request->setMetrics($metrics);
-        $request->setDimensions($dimensions);
-        $request->setOrderBys([
-            ['fieldName' => 'ga:pageviews', 'sortOrder' => 'DESCENDING']
+        $request = new RunReportRequest([
+            'property' => $this->propertyId,
+            'date_ranges' => [
+                new DateRange([
+                    'start_date' => $dateRange['startDate'],
+                    'end_date' => $dateRange['endDate'],
+                ])
+            ],
+            'dimensions' => [
+                new Dimension(['name' => 'pagePath'])
+            ],
+            'metrics' => [
+                new Metric(['name' => 'screenPageViews'])
+            ],
+            'order_bys' => [
+                new OrderBy([
+                    'metric' => new MetricOrderBy([
+                        'metric_name' => 'screenPageViews'
+                    ]),
+                    'desc' => true
+                ])
+            ],
+            'limit' => 10
         ]);
-        $request->setPageSize(10);
 
-        $body = new GetReportsRequest();
-        $body->setReportRequests([$request]);
-
-        $response = $this->analytics->reports->batchGet($body);
-        $report = $response->getReports()[0];
-        $rows = $report->getData()->getRows();
-
+        $response = $this->analytics->runReport($request);
+        
         $topPages = [];
-        if ($rows) {
-            foreach ($rows as $row) {
-                $topPages[] = [
-                    'path' => $row->getDimensions()[0],
-                    'views' => (int) $row->getMetrics()[0]->getValues()[0]
-                ];
-            }
+        foreach ($response->getRows() as $row) {
+            $topPages[] = [
+                'path' => $row->getDimensionValues()[0]->getValue(),
+                'views' => (int) $row->getMetricValues()[0]->getValue()
+            ];
         }
 
         return $topPages;
@@ -186,38 +184,39 @@ class GoogleAnalyticsService
 
     private function getTrafficSources($dateRange)
     {
-        $dateRangeObj = new DateRange();
-        $dateRangeObj->setStartDate($dateRange['startDate']);
-        $dateRangeObj->setEndDate($dateRange['endDate']);
-
-        $metrics = [new Metric(['expression' => 'ga:sessions'])];
-        $dimensions = [new Dimension(['name' => 'ga:source'])];
-
-        $request = new ReportRequest();
-        $request->setViewId($this->viewId);
-        $request->setDateRanges($dateRangeObj);
-        $request->setMetrics($metrics);
-        $request->setDimensions($dimensions);
-        $request->setOrderBys([
-            ['fieldName' => 'ga:sessions', 'sortOrder' => 'DESCENDING']
+        $request = new RunReportRequest([
+            'property' => $this->propertyId,
+            'date_ranges' => [
+                new DateRange([
+                    'start_date' => $dateRange['startDate'],
+                    'end_date' => $dateRange['endDate'],
+                ])
+            ],
+            'dimensions' => [
+                new Dimension(['name' => 'sessionSource'])
+            ],
+            'metrics' => [
+                new Metric(['name' => 'sessions'])
+            ],
+            'order_bys' => [
+                new OrderBy([
+                    'metric' => new MetricOrderBy([
+                        'metric_name' => 'sessions'
+                    ]),
+                    'desc' => true
+                ])
+            ],
+            'limit' => 10
         ]);
-        $request->setPageSize(10);
 
-        $body = new GetReportsRequest();
-        $body->setReportRequests([$request]);
-
-        $response = $this->analytics->reports->batchGet($body);
-        $report = $response->getReports()[0];
-        $rows = $report->getData()->getRows();
-
+        $response = $this->analytics->runReport($request);
+        
         $sources = [];
-        if ($rows) {
-            foreach ($rows as $row) {
-                $sources[] = [
-                    'source' => $row->getDimensions()[0],
-                    'sessions' => (int) $row->getMetrics()[0]->getValues()[0]
-                ];
-            }
+        foreach ($response->getRows() as $row) {
+            $sources[] = [
+                'source' => $row->getDimensionValues()[0]->getValue(),
+                'sessions' => (int) $row->getMetricValues()[0]->getValue()
+            ];
         }
 
         return $sources;
@@ -225,40 +224,41 @@ class GoogleAnalyticsService
 
     private function getDailyVisitors($dateRange)
     {
-        $dateRangeObj = new DateRange();
-        $dateRangeObj->setStartDate($dateRange['startDate']);
-        $dateRangeObj->setEndDate($dateRange['endDate']);
-
-        $metrics = [new Metric(['expression' => 'ga:users'])];
-        $dimensions = [new Dimension(['name' => 'ga:date'])];
-
-        $request = new ReportRequest();
-        $request->setViewId($this->viewId);
-        $request->setDateRanges($dateRangeObj);
-        $request->setMetrics($metrics);
-        $request->setDimensions($dimensions);
-        $request->setOrderBys([
-            ['fieldName' => 'ga:date', 'sortOrder' => 'ASCENDING']
+        $request = new RunReportRequest([
+            'property' => $this->propertyId,
+            'date_ranges' => [
+                new DateRange([
+                    'start_date' => $dateRange['startDate'],
+                    'end_date' => $dateRange['endDate'],
+                ])
+            ],
+            'dimensions' => [
+                new Dimension(['name' => 'date'])
+            ],
+            'metrics' => [
+                new Metric(['name' => 'activeUsers'])
+            ],
+            'order_bys' => [
+                new OrderBy([
+                    'dimension' => new DimensionOrderBy([
+                        'dimension_name' => 'date'
+                    ]),
+                    'desc' => false
+                ])
+            ]
         ]);
 
-        $body = new GetReportsRequest();
-        $body->setReportRequests([$request]);
-
-        $response = $this->analytics->reports->batchGet($body);
-        $report = $response->getReports()[0];
-        $rows = $report->getData()->getRows();
-
+        $response = $this->analytics->runReport($request);
+        
         $dailyData = [];
-        if ($rows) {
-            foreach ($rows as $row) {
-                $date = $row->getDimensions()[0];
-                $formattedDate = \Carbon\Carbon::createFromFormat('Ymd', $date)->format('Y-m-d');
-                
-                $dailyData[] = [
-                    'date' => $formattedDate,
-                    'visitors' => (int) $row->getMetrics()[0]->getValues()[0]
-                ];
-            }
+        foreach ($response->getRows() as $row) {
+            $date = $row->getDimensionValues()[0]->getValue();
+            $formattedDate = \Carbon\Carbon::createFromFormat('Ymd', $date)->format('Y-m-d');
+            
+            $dailyData[] = [
+                'date' => $formattedDate,
+                'visitors' => (int) $row->getMetricValues()[0]->getValue()
+            ];
         }
 
         return $dailyData;
