@@ -983,30 +983,39 @@ class WorkController extends Controller
                 'category' => $work->category,
                 'year' => $work->year,
                 'description' => $work->description,
-                'slug' => $work->slug,
                 'hero_banner_image' => $work->hero_banner_image,
                 'video_project_src' => $work->video_project_src,
                 'video_project_poster' => $work->video_project_poster,
                 'tags' => $work->tags ?? [],
-                'published_at' => $work->published_at?->toISOString(),
+                'status' => $work->status,
+                'slug' => $work->slug,
+                'meta_description' => $work->meta_description,
                 'display_order' => $work->display_order,
+                'published_at' => $work->published_at?->toISOString(),
+                'created_at' => $work->created_at?->toISOString(),
+                'updated_at' => $work->updated_at?->toISOString(),
                 'credits' => $work->credits ? $work->credits->map(function ($credit) {
                     return [
                         'id' => $credit->id,
                         'role' => $credit->role,
-                        'name' => $credit->name,
+                        'names' => $credit->names, // Use correct field name (array)
+                        'order' => $credit->order,
                         'work_id' => $credit->work_id,
+                        'created_at' => $credit->created_at,
+                        'updated_at' => $credit->updated_at,
                     ];
                 }) : [],
                 'gallery_items' => $work->galleryItems ? $work->galleryItems->map(function ($item) {
                     return [
                         'id' => $item->id,
                         'type' => $item->type,
-                        'src' => $item->src,
-                        'alt' => $item->alt,
+                        'images' => $item->images, // Use correct field name (array)
+                        'order' => $item->order,
                         'caption' => $item->caption,
-                        'display_order' => $item->display_order,
+                        'description' => $item->description,
                         'work_id' => $item->work_id,
+                        'created_at' => $item->created_at,
+                        'updated_at' => $item->updated_at,
                     ];
                 }) : [],
                 'credits_count' => $work->credits ? $work->credits->count() : 0,
