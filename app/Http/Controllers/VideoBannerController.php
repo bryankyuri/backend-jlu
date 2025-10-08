@@ -16,7 +16,7 @@ class VideoBannerController extends Controller
     public function index(): JsonResponse
     {
         try {
-            $banners = VideoBanner::with(['work:id,title,client,tags'])
+            $banners = VideoBanner::with(['work:id,title,client,tags,hero_banner_image,video_project_poster,slug'])
                 ->active()
                 ->ordered()
                 ->get()
@@ -26,9 +26,11 @@ class VideoBannerController extends Controller
                         'work_id' => $banner->work_id,
                         'work_title' => $banner->work->title ?? null,
                         'work_client' => $banner->work->client ?? null,
+                        'work_slug' => $banner->work->slug ?? null,
                         'work_categories' => $banner->work->tags ?? [],
                         'video_url' => $banner->video_url,
-                        'video_thumbnail' => $banner->video_thumbnail,
+                        'video_thumbnail' => $banner->video_thumbnail_url, // Use the computed attribute
+                        'video_source_type' => $banner->video_source_type, // Add video source type
                         'is_custom_video' => $banner->is_custom_video,
                         'position' => $banner->position,
                         'created_at' => $banner->created_at,
@@ -93,7 +95,7 @@ class VideoBannerController extends Controller
             ]));
 
             // Load the work relationship
-            $banner->load(['work:id,title,client,tags']);
+            $banner->load(['work:id,title,client,tags,hero_banner_image,video_project_poster,slug']);
 
             // Format response
             $formattedBanner = [
@@ -101,9 +103,11 @@ class VideoBannerController extends Controller
                 'work_id' => $banner->work_id,
                 'work_title' => $banner->work->title ?? null,
                 'work_client' => $banner->work->client ?? null,
+                'work_slug' => $banner->work->slug ?? null,
                 'work_categories' => $banner->work->tags ?? [],
                 'video_url' => $banner->video_url,
-                'video_thumbnail' => $banner->video_thumbnail,
+                'video_thumbnail' => $banner->video_thumbnail_url, // Use the computed attribute
+                'video_source_type' => $banner->video_source_type, // Add video source type
                 'is_custom_video' => $banner->is_custom_video,
                 'position' => $banner->position,
                 'created_at' => $banner->created_at,
@@ -130,16 +134,18 @@ class VideoBannerController extends Controller
     public function show(string $id): JsonResponse
     {
         try {
-            $banner = VideoBanner::with(['work:id,title,client,tags'])->findOrFail($id);
+            $banner = VideoBanner::with(['work:id,title,client,tags,hero_banner_image,video_project_poster,slug'])->findOrFail($id);
 
             $formattedBanner = [
                 'id' => $banner->id,
                 'work_id' => $banner->work_id,
                 'work_title' => $banner->work->title ?? null,
                 'work_client' => $banner->work->client ?? null,
+                'work_slug' => $banner->work->slug ?? null,
                 'work_categories' => $banner->work->tags ?? [],
                 'video_url' => $banner->video_url,
-                'video_thumbnail' => $banner->video_thumbnail,
+                'video_thumbnail' => $banner->video_thumbnail_url, // Use the computed attribute
+                'video_source_type' => $banner->video_source_type, // Add video source type
                 'is_custom_video' => $banner->is_custom_video,
                 'position' => $banner->position,
                 'is_active' => $banner->is_active,
@@ -196,7 +202,7 @@ class VideoBannerController extends Controller
             ]));
 
             // Load the work relationship
-            $banner->load(['work:id,title,client,tags']);
+            $banner->load(['work:id,title,client,tags,hero_banner_image,video_project_poster,slug']);
 
             // Format response
             $formattedBanner = [
@@ -204,9 +210,11 @@ class VideoBannerController extends Controller
                 'work_id' => $banner->work_id,
                 'work_title' => $banner->work->title ?? null,
                 'work_client' => $banner->work->client ?? null,
+                'work_slug' => $banner->work->slug ?? null,
                 'work_categories' => $banner->work->tags ?? [],
                 'video_url' => $banner->video_url,
-                'video_thumbnail' => $banner->video_thumbnail,
+                'video_thumbnail' => $banner->video_thumbnail_url, // Use the computed attribute
+                'video_source_type' => $banner->video_source_type, // Add video source type
                 'is_custom_video' => $banner->is_custom_video,
                 'position' => $banner->position,
                 'created_at' => $banner->created_at,
@@ -283,7 +291,7 @@ class VideoBannerController extends Controller
             VideoBanner::reorderBanners($request->banners);
 
             // Get updated banners
-            $banners = VideoBanner::with(['work:id,title,client,tags'])
+            $banners = VideoBanner::with(['work:id,title,client,tags,hero_banner_image,video_project_poster,slug'])
                 ->active()
                 ->ordered()
                 ->get()
@@ -293,9 +301,11 @@ class VideoBannerController extends Controller
                         'work_id' => $banner->work_id,
                         'work_title' => $banner->work->title ?? null,
                         'work_client' => $banner->work->client ?? null,
+                        'work_slug' => $banner->work->slug ?? null,
                         'work_categories' => $banner->work->tags ?? [],
                         'video_url' => $banner->video_url,
-                        'video_thumbnail' => $banner->video_thumbnail,
+                        'video_thumbnail' => $banner->video_thumbnail_url, // Use the computed attribute
+                        'video_source_type' => $banner->video_source_type, // Add video source type
                         'is_custom_video' => $banner->is_custom_video,
                         'position' => $banner->position,
                         'created_at' => $banner->created_at,
@@ -323,7 +333,7 @@ class VideoBannerController extends Controller
     public function getPublicBanners(): JsonResponse
     {
         try {
-            $banners = VideoBanner::with(['work:id,title,client,tags'])
+            $banners = VideoBanner::with(['work:id,title,client,tags,hero_banner_image,video_project_poster,slug'])
                 ->active()
                 ->ordered()
                 ->get()
@@ -333,9 +343,11 @@ class VideoBannerController extends Controller
                         'work_id' => $banner->work_id,
                         'title' => $banner->work->title ?? 'Untitled Project',
                         'client' => $banner->work->client ?? 'Unknown Client',
+                        'slug' => $banner->work->slug ?? null,
                         'categories' => $banner->work->tags ?? [],
                         'video_url' => $banner->video_url,
-                        'video_thumbnail' => $banner->video_thumbnail,
+                        'video_thumbnail' => $banner->video_thumbnail_url, // Use the computed attribute
+                        'video_source_type' => $banner->video_source_type, // Add video source type
                         'is_custom_video' => $banner->is_custom_video,
                         'position' => $banner->position,
                     ];

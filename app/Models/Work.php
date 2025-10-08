@@ -35,6 +35,9 @@ class Work extends Model
         'hero_banner_image',
         'video_project_src',
         'video_project_poster',
+        'video_vimeo_url',
+        'video_youtube_url',
+        'video_cloudflare_url',
         'tags',
         'status',
         'slug',
@@ -84,7 +87,7 @@ class Work extends Model
 
         // Update slug and published_at when updating
         static::updating(function ($work) {
-            if ($work->isDirty('title') && empty($work->slug)) {
+            if ($work->isDirty('title')) {
                 $work->slug = static::generateUniqueSlug($work->title, $work->id);
             }
             
@@ -110,7 +113,7 @@ class Work extends Model
         $counter = 1;
 
         while (static::slugExists($slug, $excludeId)) {
-            $slug = $originalSlug . '-' . $counter;
+            $slug = $originalSlug . '-(' . $counter . ')';
             $counter++;
         }
 

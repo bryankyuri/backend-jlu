@@ -128,6 +128,9 @@ class WorkController extends Controller
                 'hero_banner_image' => $validatedData['hero_banner_image'] ?? null,
                 'video_project_src' => $validatedData['video_project_src'] ?? null,
                 'video_project_poster' => $validatedData['video_project_poster'] ?? null,
+                'video_vimeo_url' => $validatedData['video_vimeo_url'] ?? null,
+                'video_youtube_url' => $validatedData['video_youtube_url'] ?? null,
+                'video_cloudflare_url' => $validatedData['video_cloudflare_url'] ?? null,
                 'tags' => $validatedData['tags'] ?? [],
                 'status' => $validatedData['status'] ?? 'draft',
                 'created_by' => Auth::id(),
@@ -160,7 +163,8 @@ class WorkController extends Controller
 
             DB::commit();
 
-            // Load relationships for response
+            // Refresh the model to ensure all auto-generated fields (like slug) are included
+            $work->refresh();
             $work->load(['credits', 'galleryItems']);
 
             return response()->json([
@@ -233,6 +237,9 @@ class WorkController extends Controller
                 'hero_banner_image' => $validatedData['hero_banner_image'] ?? null,
                 'video_project_src' => $validatedData['video_project_src'] ?? null,
                 'video_project_poster' => $validatedData['video_project_poster'] ?? null,
+                'video_vimeo_url' => $validatedData['video_vimeo_url'] ?? null,
+                'video_youtube_url' => $validatedData['video_youtube_url'] ?? null,
+                'video_cloudflare_url' => $validatedData['video_cloudflare_url'] ?? null,
                 'tags' => $validatedData['tags'] ?? [],
                 'status' => $validatedData['status'] ?? $work->status,
                 'updated_by' => Auth::id(),
@@ -266,7 +273,8 @@ class WorkController extends Controller
 
             DB::commit();
 
-            // Load relationships for response
+            // Refresh the model to get updated slug and load relationships
+            $work->refresh();
             $work->load(['credits', 'galleryItems']);
 
             return response()->json([
@@ -317,6 +325,9 @@ class WorkController extends Controller
                 'hero_banner_image' => $validatedData['hero_banner_image'] ?? $work->hero_banner_image,
                 'video_project_src' => $validatedData['video_project_src'] ?? $work->video_project_src,
                 'video_project_poster' => $validatedData['video_project_poster'] ?? $work->video_project_poster,
+                'video_vimeo_url' => $validatedData['video_vimeo_url'] ?? $work->video_vimeo_url,
+                'video_youtube_url' => $validatedData['video_youtube_url'] ?? $work->video_youtube_url,
+                'video_cloudflare_url' => $validatedData['video_cloudflare_url'] ?? $work->video_cloudflare_url,
                 'tags' => $validatedData['tags'] ?? $work->tags,
                 'status' => $validatedData['status'] ?? $work->status,
                 'updated_by' => Auth::id(),
@@ -352,7 +363,8 @@ class WorkController extends Controller
 
             DB::commit();
 
-            // Load relationships for response
+            // Refresh the model to get updated slug and load relationships
+            $work->refresh();
             $work->load(['credits', 'galleryItems']);
 
             return response()->json([
@@ -474,7 +486,7 @@ class WorkController extends Controller
      */
     private function validateWorkData(Request $request, ?Work $work = null): array
     {
-        $rules = [
+    $rules = [
             'title' => 'required|string|max:255',
             'client' => 'required|string|max:255', 
             'category' => 'required|in:film/series,commercial',
@@ -483,6 +495,9 @@ class WorkController extends Controller
             'hero_banner_image' => 'nullable|string',
             'video_project_src' => 'nullable|string',
             'video_project_poster' => 'nullable|string',
+            'video_vimeo_url' => 'nullable|string|max:255',
+            'video_youtube_url' => 'nullable|string|max:255',
+            'video_cloudflare_url' => 'nullable|string|max:255',
             'tags' => 'nullable|array',
             'tags.*' => 'string|in:MOTION GRAPHIC,COLOR GRADING,VFX,CGI',
             'status' => 'nullable|in:draft,published',
@@ -519,7 +534,7 @@ class WorkController extends Controller
      */
     private function validateWorkChanges(Request $request, ?Work $work = null): array
     {
-        $rules = [
+    $rules = [
             'title' => 'required|string|max:255',
             'client' => 'required|string|max:255', 
             'category' => 'required|in:film/series,commercial',
@@ -528,6 +543,9 @@ class WorkController extends Controller
             'hero_banner_image' => 'nullable|string',
             'video_project_src' => 'nullable|string',
             'video_project_poster' => 'nullable|string',
+            'video_vimeo_url' => 'nullable|string|max:255',
+            'video_youtube_url' => 'nullable|string|max:255',
+            'video_cloudflare_url' => 'nullable|string|max:255',
             'tags' => 'nullable|array',
             'tags.*' => 'string|in:MOTION GRAPHIC,COLOR GRADING,VFX,CGI',
             'status' => 'nullable|in:draft,published',
@@ -656,6 +674,9 @@ class WorkController extends Controller
                     'hero_banner_image' => $work->hero_banner_image,
                     'video_project_src' => $work->video_project_src,
                     'video_project_poster' => $work->video_project_poster,
+                    'video_vimeo_url' => $work->video_vimeo_url,
+                    'video_youtube_url' => $work->video_youtube_url,
+                    'video_cloudflare_url' => $work->video_cloudflare_url,
                     'tags' => $work->tags ?? [],
                     'published_at' => $work->published_at?->toISOString(),
                     'display_order' => $work->display_order,
@@ -810,6 +831,9 @@ class WorkController extends Controller
                     'hero_banner_image' => $work->hero_banner_image,
                     'video_project_src' => $work->video_project_src,
                     'video_project_poster' => $work->video_project_poster,
+                    'video_vimeo_url' => $work->video_vimeo_url,
+                    'video_youtube_url' => $work->video_youtube_url,
+                    'video_cloudflare_url' => $work->video_cloudflare_url,
                     'tags' => $work->tags ?? [],
                     'published_at' => $work->published_at?->toISOString(),
                     'display_order' => $work->display_order,
@@ -918,6 +942,9 @@ class WorkController extends Controller
                     'hero_banner_image' => $work->hero_banner_image,
                     'video_project_src' => $work->video_project_src,
                     'video_project_poster' => $work->video_project_poster,
+                    'video_vimeo_url' => $work->video_vimeo_url,
+                    'video_youtube_url' => $work->video_youtube_url,
+                    'video_cloudflare_url' => $work->video_cloudflare_url,
                     'tags' => $work->tags ?? [],
                     'published_at' => $work->published_at?->toISOString(),
                     'updated_at' => $work->updated_at?->toISOString(),
@@ -986,6 +1013,9 @@ class WorkController extends Controller
                 'hero_banner_image' => $work->hero_banner_image,
                 'video_project_src' => $work->video_project_src,
                 'video_project_poster' => $work->video_project_poster,
+                'video_vimeo_url' => $work->video_vimeo_url,
+                'video_youtube_url' => $work->video_youtube_url,
+                'video_cloudflare_url' => $work->video_cloudflare_url,
                 'tags' => $work->tags ?? [],
                 'status' => $work->status,
                 'slug' => $work->slug,

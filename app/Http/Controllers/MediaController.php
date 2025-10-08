@@ -198,7 +198,7 @@ class MediaController extends Controller
                     'required',
                     'file',
                     'mimes:mp4,mov,avi',
-                    'max:51200', // Max 50MB for videos
+                    'max:124000', // Max 124MB for videos
                 ],
                 'poster' => [
                     'nullable',

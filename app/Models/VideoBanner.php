@@ -96,6 +96,54 @@ class VideoBanner extends Model
     }
 
     /**
+     * Determine the video source type based on the video URL
+     */
+    public function getVideoSourceTypeAttribute(): string
+    {
+        if (empty($this->video_url)) {
+            return 'unknown';
+        }
+
+        // Check for Cloudflare Stream
+        if (str_contains($this->video_url, 'cloudflare') || 
+            str_contains($this->video_url, 'videodelivery.net')) {
+            return 'cloudflare';
+        }
+
+        // Check if it's a custom video (uploaded to library)
+        if ($this->is_custom_video) {
+            return 'custom';
+        }
+
+        // Default work video
+        return 'default';
+    }
+
+    /**
+     * Get the appropriate thumbnail for the video banner
+     */
+    public function getVideoThumbnailUrlAttribute(): ?string
+    {
+        // If we have a stored thumbnail, use it
+        if (!empty($this->video_thumbnail)) {
+            return $this->video_thumbnail;
+        }
+
+        // For Cloudflare videos, use the work's hero image as thumbnail
+        if ($this->getVideoSourceTypeAttribute() === 'cloudflare' && $this->work) {
+            return $this->work->hero_banner_image;
+        }
+
+        // For default videos, use work's video poster or hero image
+        if ($this->getVideoSourceTypeAttribute() === 'default' && $this->work) {
+            return $this->work->video_project_poster ?? $this->work->hero_banner_image;
+        }
+
+        // Fallback to stored thumbnail or null
+        return $this->video_thumbnail;
+    }
+
+    /**
      * Boot method to handle model events
      */
     protected static function boot()

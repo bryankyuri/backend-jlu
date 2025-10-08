@@ -25,6 +25,9 @@ return new class extends Migration
             $table->string('hero_banner_image')->nullable();
             $table->string('video_project_src')->nullable();
             $table->string('video_project_poster')->nullable();
+            $table->string('video_vimeo_url')->nullable();
+            $table->string('video_youtube_url')->nullable();
+            $table->string('video_cloudflare_url')->nullable();
             
             // Tags (stored as JSON array)
             $table->json('tags')->nullable();
