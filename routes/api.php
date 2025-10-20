@@ -11,6 +11,7 @@ use App\Http\Controllers\API\WorkController;
 use App\Http\Controllers\API\AnalyticsController;
 use App\Http\Controllers\MediaController;
 use App\Http\Controllers\VideoBannerController;
+use App\Http\Controllers\ShowreelController;
 
 /*
 |--------------------------------------------------------------------------
@@ -186,6 +187,16 @@ Route::middleware(['auth:sanctum'])->prefix('video-banners')->group(function () 
     Route::post('/reorder', [VideoBannerController::class, 'reorder']);
 });
 
+// Showreel management routes - Protected by authentication for CMS
+Route::middleware(['auth:sanctum'])->prefix('showreels')->group(function () {
+    Route::get('/', [ShowreelController::class, 'index']);
+    Route::post('/', [ShowreelController::class, 'store']);
+    Route::get('/{id}', [ShowreelController::class, 'show']);
+    Route::put('/{id}', [ShowreelController::class, 'update']);
+    Route::delete('/{id}', [ShowreelController::class, 'destroy']);
+    Route::post('/reorder', [ShowreelController::class, 'reorder']);
+});
+
 // Analytics routes - protected by authentication
 Route::middleware(['auth:sanctum'])->prefix('analytics')->group(function () {
     Route::get('/dashboard', [AnalyticsController::class, 'getDashboardData']);
@@ -225,6 +236,9 @@ Route::prefix('v1')->group(function () {
     // Video Banners endpoints (public access)
     Route::get('/video-banners', [VideoBannerController::class, 'getPublicBanners']);
     
+    // Showreel endpoints (public access)
+    Route::get('/showreels', [ShowreelController::class, 'getPublicShowreels']);
+    
     // Public Works API with filtering, search, sorting, and pagination
     Route::get('/works-list', [WorkController::class, 'getPublicWorks']);
     
@@ -249,6 +263,20 @@ Route::prefix('v1')->group(function () {
         ]);
     });
     
+});
+
+// Contact Submissions (new implementation) - Outside v1 prefix for direct access
+Route::middleware(['throttle:contact-submission'])->group(function () {
+    Route::post('/contact-submissions', [App\Http\Controllers\ContactSubmissionController::class, 'store']);
+});
+
+// Admin-only contact submission management routes
+Route::middleware(['auth:sanctum'])->prefix('admin')->group(function () {
+    Route::get('/contact-submissions', [App\Http\Controllers\ContactSubmissionController::class, 'index']);
+    Route::get('/contact-submissions/{submission}', [App\Http\Controllers\ContactSubmissionController::class, 'show']);
+    Route::put('/contact-submissions/{submission}', [App\Http\Controllers\ContactSubmissionController::class, 'update']);
+    Route::delete('/contact-submissions/{submission}', [App\Http\Controllers\ContactSubmissionController::class, 'destroy']);
+    Route::post('/contact-submissions/bulk-action', [App\Http\Controllers\ContactSubmissionController::class, 'bulkAction']);
 });
 
 // Health check endpoint
