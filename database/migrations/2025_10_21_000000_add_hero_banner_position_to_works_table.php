@@ -12,7 +12,9 @@ return new class extends Migration
     public function up(): void
     {
         Schema::table('works', function (Blueprint $table) {
-            $table->string('video_cloudflare_url')->nullable();
+            // Add hero banner position columns after hero_banner_image
+            $table->string('hero_banner_position_x', 50)->default('center')->after('hero_banner_image');
+            $table->string('hero_banner_position_y', 50)->default('top')->after('hero_banner_position_x');
         });
     }
 
@@ -22,7 +24,7 @@ return new class extends Migration
     public function down(): void
     {
         Schema::table('works', function (Blueprint $table) {
-            $table->dropColumn('video_cloudflare_url');
+            $table->dropColumn(['hero_banner_position_x', 'hero_banner_position_y']);
         });
     }
 };

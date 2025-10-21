@@ -33,6 +33,8 @@ class Work extends Model
         'year',
         'description',
         'hero_banner_image',
+        'hero_banner_position_x',
+        'hero_banner_position_y',
         'video_project_src',
         'video_project_poster',
         'video_vimeo_url',
