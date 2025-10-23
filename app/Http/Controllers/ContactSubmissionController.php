@@ -80,8 +80,13 @@ class ContactSubmissionController extends Controller
 
             // Send emails asynchronously (in background if queue is configured)
             try {
-                // Send notification to admin
+                // Send notification to admin and team
                 Mail::to(config('mail.contact_email', 'contact@parallelstudio.asia'))
+                    ->cc([
+                        'kenzo@parallelstudio.asia',
+                        'yuda@parallelstudio.asia',
+                        'agung@parallelstudio.asia'
+                    ])
                     ->send(new ContactSubmissionNotification($submission));
 
                 // Send confirmation to user
