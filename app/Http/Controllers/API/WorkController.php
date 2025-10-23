@@ -239,11 +239,11 @@ class WorkController extends Controller
                 'hero_banner_image' => $validatedData['hero_banner_image'] ?? null,
                 'hero_banner_position_x' => $validatedData['hero_banner_position_x'] ?? $work->hero_banner_position_x,
                 'hero_banner_position_y' => $validatedData['hero_banner_position_y'] ?? $work->hero_banner_position_y,
-                'video_project_src' => $validatedData['video_project_src'] ?? null,
-                'video_project_poster' => $validatedData['video_project_poster'] ?? null,
-                'video_vimeo_url' => $validatedData['video_vimeo_url'] ?? null,
-                'video_youtube_url' => $validatedData['video_youtube_url'] ?? null,
-                'video_cloudflare_url' => $validatedData['video_cloudflare_url'] ?? null,
+                'video_project_src' => !empty($validatedData['video_project_src']) ? $validatedData['video_project_src'] : null,
+                'video_project_poster' => !empty($validatedData['video_project_poster']) ? $validatedData['video_project_poster'] : null,
+                'video_vimeo_url' => !empty($validatedData['video_vimeo_url']) ? $validatedData['video_vimeo_url'] : null,
+                'video_youtube_url' => !empty($validatedData['video_youtube_url']) ? $validatedData['video_youtube_url'] : null,
+                'video_cloudflare_url' => !empty($validatedData['video_cloudflare_url']) ? $validatedData['video_cloudflare_url'] : null,
                 'tags' => $validatedData['tags'] ?? [],
                 'status' => $validatedData['status'] ?? $work->status,
                 'updated_by' => Auth::id(),
@@ -319,8 +319,8 @@ class WorkController extends Controller
 
             DB::beginTransaction();
 
-            // Update the work main data
-            $work->update([
+            // Prepare update data
+            $updateData = [
                 'title' => $validatedData['title'],
                 'client' => $validatedData['client'],
                 'category' => $validatedData['category'],
@@ -329,15 +329,30 @@ class WorkController extends Controller
                 'hero_banner_image' => $validatedData['hero_banner_image'] ?? $work->hero_banner_image,
                 'hero_banner_position_x' => $validatedData['hero_banner_position_x'] ?? $work->hero_banner_position_x,
                 'hero_banner_position_y' => $validatedData['hero_banner_position_y'] ?? $work->hero_banner_position_y,
-                'video_project_src' => $validatedData['video_project_src'] ?? $work->video_project_src,
-                'video_project_poster' => $validatedData['video_project_poster'] ?? $work->video_project_poster,
-                'video_vimeo_url' => $validatedData['video_vimeo_url'] ?? $work->video_vimeo_url,
-                'video_youtube_url' => $validatedData['video_youtube_url'] ?? $work->video_youtube_url,
-                'video_cloudflare_url' => $validatedData['video_cloudflare_url'] ?? $work->video_cloudflare_url,
                 'tags' => $validatedData['tags'] ?? $work->tags,
                 'status' => $validatedData['status'] ?? $work->status,
                 'updated_by' => Auth::id(),
-            ]);
+            ];
+
+            // Handle video fields - convert empty strings to null
+            if (array_key_exists('video_project_src', $validatedData)) {
+                $updateData['video_project_src'] = empty($validatedData['video_project_src']) ? null : $validatedData['video_project_src'];
+            }
+            if (array_key_exists('video_project_poster', $validatedData)) {
+                $updateData['video_project_poster'] = empty($validatedData['video_project_poster']) ? null : $validatedData['video_project_poster'];
+            }
+            if (array_key_exists('video_vimeo_url', $validatedData)) {
+                $updateData['video_vimeo_url'] = empty($validatedData['video_vimeo_url']) ? null : $validatedData['video_vimeo_url'];
+            }
+            if (array_key_exists('video_youtube_url', $validatedData)) {
+                $updateData['video_youtube_url'] = empty($validatedData['video_youtube_url']) ? null : $validatedData['video_youtube_url'];
+            }
+            if (array_key_exists('video_cloudflare_url', $validatedData)) {
+                $updateData['video_cloudflare_url'] = empty($validatedData['video_cloudflare_url']) ? null : $validatedData['video_cloudflare_url'];
+            }
+
+            // Update the work main data
+            $work->update($updateData);
 
             // Update credits only if provided
             if (isset($validatedData['credits']) && is_array($validatedData['credits'])) {
@@ -495,7 +510,7 @@ class WorkController extends Controller
     $rules = [
             'title' => 'required|string|max:255',
             'client' => 'required|string|max:255', 
-            'category' => 'required|in:film/series,commercial',
+            'category' => 'required|in:film/series,commercial,music video',
             'year' => 'nullable|string|size:4|regex:/^\d{4}$/',
             'description' => 'nullable|string|max:2000',
             'hero_banner_image' => 'nullable|string',
@@ -515,7 +530,7 @@ class WorkController extends Controller
             'credits.*.names.*' => 'required|string|max:255',
             'credits.*.order' => 'nullable|integer|min:0',
             'gallery_items' => 'nullable|array',
-            'gallery_items.*.type' => 'required|in:full-width,2col-full,2col-4:5,compare-full',
+            'gallery_items.*.type' => 'required|in:full-16:9,full-1.85:1,full-2.35:1,full-2.39:1,full-4:3,2col-16:9,2col-1.85:1,2col-2.35:1,2col-2.39:1,2col-4:3,compare-16:9,compare-1.85:1,compare-2.35:1,compare-2.39:1,compare-4:3',
             'gallery_items.*.images' => 'required|array|min:1',
             'gallery_items.*.images.*' => 'required|string',
             'gallery_items.*.order' => 'nullable|integer|min:0',
@@ -524,17 +539,32 @@ class WorkController extends Controller
         // For draft status, make some fields optional
         if ($request->status === 'draft') {
             $rules['hero_banner_image'] = 'nullable|string';
-            $rules['video_project_src'] = 'nullable|string';
             $rules['credits'] = 'nullable|array';
             $rules['gallery_items'] = 'nullable|array';
         } else {
             // For published status, ensure required fields
             $rules['hero_banner_image'] = 'required|string';
-            $rules['video_project_src'] = 'required|string';
             $rules['credits'] = 'required|array|min:1';
         }
 
-        return $request->validate($rules);
+        // Validate the basic rules first
+        $validated = $request->validate($rules);
+
+        // For published status, ensure at least one video source is provided
+        if ($request->status === 'published') {
+            $hasVideoSource = !empty($request->video_project_src) ||
+                            !empty($request->video_vimeo_url) ||
+                            !empty($request->video_youtube_url) ||
+                            !empty($request->video_cloudflare_url);
+
+            if (!$hasVideoSource) {
+                throw ValidationException::withMessages([
+                    'video_sources' => ['At least one video source (Media Gallery, Vimeo, YouTube, or Cloudflare) is required for published works.']
+                ]);
+            }
+        }
+
+        return $validated;
     }
 
     /**
@@ -545,7 +575,7 @@ class WorkController extends Controller
     $rules = [
             'title' => 'required|string|max:255',
             'client' => 'required|string|max:255', 
-            'category' => 'required|in:film/series,commercial',
+            'category' => 'required|in:film/series,commercial,music video',
             'year' => 'nullable|string|size:4|regex:/^\d{4}$/',
             'description' => 'nullable|string|max:2000',
             'hero_banner_image' => 'nullable|string',
@@ -565,7 +595,7 @@ class WorkController extends Controller
             'credits.*.names.*' => 'required|string|max:255',
             'credits.*.order' => 'nullable|integer|min:0',
             'gallery_items' => 'nullable|array',
-            'gallery_items.*.type' => 'required|in:full-width,2col-full,2col-4:5,compare-full',
+            'gallery_items.*.type' => 'required|in:full-16:9,full-1.85:1,full-2.35:1,full-2.39:1,full-4:3,2col-16:9,2col-1.85:1,2col-2.35:1,2col-2.39:1,2col-4:3,compare-16:9,compare-1.85:1,compare-2.35:1,compare-2.39:1,compare-4:3',
             'gallery_items.*.images' => 'required|array|min:1',
             'gallery_items.*.images.*' => 'required|string',
             'gallery_items.*.order' => 'nullable|integer|min:0',
@@ -646,7 +676,7 @@ class WorkController extends Controller
             }
 
             // Apply sorting
-            $sortBy = $request->input('sort_by', 'published_at');
+            $sortBy = $request->input('sort_by', 'year');
             $sortDirection = $request->input('sort_direction', 'desc');
             
             // Validate sort column for security
@@ -656,7 +686,7 @@ class WorkController extends Controller
             ];
             
             if (!in_array($sortBy, $allowedSortColumns)) {
-                $sortBy = 'published_at';
+                $sortBy = 'year';
             }
             
             if (!in_array(strtolower($sortDirection), ['asc', 'desc'])) {
