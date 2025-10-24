@@ -54,6 +54,11 @@ class WorkController extends Controller
                 }
             }
 
+            // Filter by year
+            if (!empty($filters['year']) && $filters['year'] !== 'all') {
+                $query->where('year', $filters['year']);
+            }
+
             // Filter by published status for public API
             if (isset($filters['published']) && $filters['published'] === true) {
                 $query->where('status', 'published');
