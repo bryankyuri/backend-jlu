@@ -10,6 +10,7 @@ use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Validator;
 use Illuminate\Validation\ValidationException;
 
 class WorkController extends Controller
@@ -75,16 +76,21 @@ class WorkController extends Controller
             }
 
             // Apply sorting
-            $sortBy = $filters['sort_by'] ?? 'created_at';
+            $sortBy = $filters['sort_by'] ?? 'display_order';
             $sortDirection = $filters['sort_direction'] ?? 'desc';
             
             // Validate sort column
-            $allowedSortColumns = ['created_at', 'updated_at', 'title', 'client', 'status', 'published_at'];
+            $allowedSortColumns = ['created_at', 'updated_at', 'title', 'client', 'status', 'published_at', 'display_order', 'year'];
             if (!in_array($sortBy, $allowedSortColumns)) {
-                $sortBy = 'created_at';
+                $sortBy = 'display_order';
             }
             
-            $query->orderBy($sortBy, $sortDirection);
+            // Special handling for display_order: nulls last
+            if ($sortBy === 'display_order') {
+                $query->orderByRaw('display_order IS NULL, display_order ' . $sortDirection);
+            } else {
+                $query->orderBy($sortBy, $sortDirection);
+            }
 
             // Pagination
             $page = $filters['page'] ?? 1;
@@ -508,6 +514,73 @@ class WorkController extends Controller
     }
 
     /**
+     * Reorder works by updating display_order
+     */
+    public function reorder(Request $request): JsonResponse
+    {
+        try {
+            // Validation
+            $validator = Validator::make($request->all(), [
+                'works' => 'required|array|min:1',
+                'works.*.id' => 'required|exists:works,id',
+                'works.*.display_order' => 'required|integer|min:1'
+            ]);
+
+            if ($validator->fails()) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Validation failed',
+                    'errors' => $validator->errors()
+                ], 422);
+            }
+
+            // Check for duplicate display_order values
+            $displayOrders = array_column($request->works, 'display_order');
+            if (count($displayOrders) !== count(array_unique($displayOrders))) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Duplicate display_order values are not allowed'
+                ], 400);
+            }
+
+            // Reorder in transaction
+            DB::transaction(function () use ($request) {
+                // Temporarily set to negative values to avoid conflicts
+                foreach ($request->works as $index => $item) {
+                    Work::where('id', $item['id'])
+                        ->update(['display_order' => -($index + 1)]);
+                }
+                
+                // Set actual positions
+                foreach ($request->works as $item) {
+                    Work::where('id', $item['id'])
+                        ->update(['display_order' => $item['display_order']]);
+                }
+            });
+
+            // Return updated works
+            $workIds = array_column($request->works, 'id');
+            $works = Work::with(['credits', 'galleryItems'])
+                ->whereIn('id', $workIds)
+                ->orderBy('display_order', 'desc')
+                ->get();
+
+            return response()->json([
+                'success' => true,
+                'data' => $works,
+                'message' => 'Works reordered successfully'
+            ]);
+
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to reorder works',
+                'error' => config('app.debug') ? $e->getMessage() : 'Internal server error'
+            ], 500);
+        }
+    }
+
+    /**
      * Validate work data.
      */
     private function validateWorkData(Request $request, ?Work $work = null): array
@@ -681,7 +754,7 @@ class WorkController extends Controller
             }
 
             // Apply sorting
-            $sortBy = $request->input('sort_by', 'year');
+            $sortBy = $request->input('sort_by', 'display_order');
             $sortDirection = $request->input('sort_direction', 'desc');
             
             // Validate sort column for security
@@ -691,14 +764,19 @@ class WorkController extends Controller
             ];
             
             if (!in_array($sortBy, $allowedSortColumns)) {
-                $sortBy = 'year';
+                $sortBy = 'display_order';
             }
             
             if (!in_array(strtolower($sortDirection), ['asc', 'desc'])) {
                 $sortDirection = 'desc';
             }
             
-            $query->orderBy($sortBy, $sortDirection);
+            // Special handling for display_order: nulls last
+            if ($sortBy === 'display_order') {
+                $query->orderByRaw('display_order IS NULL, display_order ' . $sortDirection);
+            } else {
+                $query->orderBy($sortBy, $sortDirection);
+            }
 
             // Pagination
             $perPage = min((int) $request->input('per_page', 12), 50); // Max 50 per page

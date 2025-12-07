@@ -175,6 +175,7 @@ Route::middleware(['auth:sanctum'])->prefix('works')->group(function () {
     Route::delete('/{id}', [WorkController::class, 'destroy']);
     Route::patch('/{id}/publish', [WorkController::class, 'publish']);
     Route::patch('/{id}/unpublish', [WorkController::class, 'unpublish']);
+    Route::post('/reorder', [WorkController::class, 'reorder']); // Reorder works by display_order
 });
 
 // Video Banner management routes - Protected by authentication for CMS

@@ -81,6 +81,12 @@ class Work extends Model
                 $work->slug = static::generateUniqueSlug($work->title);
             }
             
+            // Auto-assign display_order (max + 1) if not set
+            if (is_null($work->display_order)) {
+                $maxOrder = static::max('display_order') ?? 0;
+                $work->display_order = $maxOrder + 1;
+            }
+            
             // Set published_at timestamp if status is published
             if ($work->status === 'published' && !$work->published_at) {
                 $work->published_at = now();
