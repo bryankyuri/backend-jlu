@@ -299,13 +299,22 @@ class ProjectController extends Controller
             ->orderBy('display_order', 'asc')
             ->get()
             ->map(function ($project) {
+                // Get images directly from projectImages relationship
+                $images = $project->projectImages
+                    ->map(function ($projectImage) {
+                        return $projectImage->media ? $projectImage->media->url : null;
+                    })
+                    ->filter() // Remove nulls
+                    ->values() // Reset array keys
+                    ->toArray();
+
                 return [
                     'id' => $project->id,
                     'title' => $project->title,
                     'location' => $project->location,
                     'year' => $project->year,
                     'description' => $project->description,
-                    'images' => $project->images->pluck('url')->toArray(),
+                    'images' => $images,
                 ];
             });
 
