@@ -17,6 +17,11 @@ return Application::configure(basePath: dirname(__DIR__))
             \App\Http\Middleware\CustomCors::class,
         ]);
         
+        // Add token validation middleware alias
+        $middleware->alias([
+            'validate.token' => \App\Http\Middleware\ValidateToken::class,
+        ]);
+        
         // Remove the stateful middleware for API-only authentication
         // $middleware->api(prepend: [
         //     \Laravel\Sanctum\Http\Middleware\EnsureFrontendRequestsAreStateful::class,

@@ -11,15 +11,12 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::create('password_reset_tokens', function (Blueprint $table) {
+        Schema::create('product_images', function (Blueprint $table) {
             $table->id();
-            $table->string('email')->index();
-            $table->string('token');
-            $table->timestamp('expires_at');
+            $table->foreignId('product_id')->constrained('products')->onDelete('cascade');
+            $table->foreignId('media_id')->constrained('media')->onDelete('cascade');
+            $table->integer('display_order')->default(0);
             $table->timestamps();
-            
-            // Index for efficient queries
-            $table->index(['email', 'token']);
         });
     }
 
@@ -28,6 +25,6 @@ return new class extends Migration
      */
     public function down(): void
     {
-        Schema::dropIfExists('password_reset_tokens');
+        Schema::dropIfExists('product_images');
     }
 };

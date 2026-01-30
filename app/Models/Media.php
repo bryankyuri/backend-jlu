@@ -16,9 +16,7 @@ class Media extends Model
         'extension',
         'alt_text',
         'description',
-        'is_active',
-        'poster_path',
-        'poster_filename'
+        'is_active'
     ];
 
     protected $casts = [
@@ -29,8 +27,7 @@ class Media extends Model
     protected $appends = [
         'is_image',
         'is_video',
-        'url',
-        'poster_url'
+        'url'
     ];
 
     /**
@@ -91,11 +88,7 @@ class Media extends Model
      */
     public function getPosterUrlAttribute()
     {
-        if ($this->is_video && $this->poster_path && $this->poster_path !== '0') {
-            // Get the base URL based on environment
-            $baseUrl = $this->getBaseUrl();
-            return $baseUrl . '/storage/' . $this->poster_path;
-        }
+        // Not used for images-only implementation
         return null;
     }
 
