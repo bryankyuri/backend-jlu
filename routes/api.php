@@ -5,6 +5,8 @@ use App\Http\Controllers\API\AuthController;
 use App\Http\Controllers\MediaController;
 use App\Http\Controllers\ProjectController;
 use App\Http\Controllers\ProductController;
+use App\Http\Controllers\ServiceGroupController;
+use App\Http\Controllers\ServiceItemController;
 
 /*
 |--------------------------------------------------------------------------
@@ -70,3 +72,27 @@ Route::middleware(['auth:sanctum', 'validate.token'])->prefix('products')->group
 
 // Public products route - accessible without authentication for frontsite
 Route::get('/public/products', [ProductController::class, 'getPublicProducts']);
+
+// Service Groups routes - Protected by authentication for CMS management
+Route::middleware(['auth:sanctum', 'validate.token'])->prefix('service-groups')->group(function () {
+    Route::get('/', [ServiceGroupController::class, 'index']);
+    Route::post('/', [ServiceGroupController::class, 'store']);
+    Route::get('/{id}', [ServiceGroupController::class, 'show']);
+    Route::put('/{id}', [ServiceGroupController::class, 'update']);
+    Route::delete('/{id}', [ServiceGroupController::class, 'destroy']);
+    Route::post('/reorder', [ServiceGroupController::class, 'reorder']);
+});
+
+// Service Items routes - Protected by authentication for CMS management
+Route::middleware(['auth:sanctum', 'validate.token'])->prefix('service-items')->group(function () {
+    Route::get('/', [ServiceItemController::class, 'index']);
+    Route::post('/', [ServiceItemController::class, 'store']);
+    Route::get('/{id}', [ServiceItemController::class, 'show']);
+    Route::put('/{id}', [ServiceItemController::class, 'update']);
+    Route::delete('/{id}', [ServiceItemController::class, 'destroy']);
+    Route::post('/reorder', [ServiceItemController::class, 'reorder']);
+});
+
+// Public services routes - accessible without authentication for frontsite
+Route::get('/public/service-groups', [ServiceGroupController::class, 'getPublicGroups']);
+Route::get('/public/services', [ServiceItemController::class, 'getPublicServices']);

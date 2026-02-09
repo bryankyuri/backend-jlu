@@ -69,6 +69,7 @@ class ProductController extends Controller
         $validator = Validator::make($request->all(), [
             'category' => ['required', Rule::in(['Crushing, Screening & Processing Equipment', 'Components, Parts & Accessories', 'Structural & Sampling Solutions'])],
             'name' => 'required|string|max:255',
+            'highlight_description' => 'nullable|string',
             'detail_specs' => 'nullable|string',
             'tags' => 'nullable|array',
             'tags.*' => 'string',
@@ -90,6 +91,7 @@ class ProductController extends Controller
             $product = Product::create($request->only([
                 'category',
                 'name',
+                'highlight_description',
                 'detail_specs',
                 'tags',
                 'status',
@@ -164,7 +166,7 @@ class ProductController extends Controller
         $validator = Validator::make($request->all(), [
             'category' => ['required', Rule::in(['Crushing, Screening & Processing Equipment', 'Components, Parts & Accessories', 'Structural & Sampling Solutions'])],
             'name' => 'required|string|max:255',
-
+            'highlight_description' => 'nullable|string',
             'detail_specs' => 'nullable|string',
             'tags' => 'nullable|array',
             'tags.*' => 'string',
@@ -186,6 +188,7 @@ class ProductController extends Controller
             $product->update($request->only([
                 'category',
                 'name',
+                'highlight_description',
                 'detail_specs',
                 'tags',
                 'status',
@@ -309,7 +312,7 @@ class ProductController extends Controller
         $validator = Validator::make($request->all(), [
             'products' => 'required|array',
             'products.*.id' => 'required|exists:products,id',
-            'products.*.display_order' => 'required|integer|min:0',
+            'products.*.display_order' => 'required|integer|min:1',
         ]);
 
         if ($validator->fails()) {
@@ -320,15 +323,27 @@ class ProductController extends Controller
             ], 422);
         }
 
-        foreach ($request->products as $item) {
-            Product::where('id', $item['id'])
-                ->update(['display_order' => $item['display_order']]);
-        }
+        DB::beginTransaction();
+        try {
+            foreach ($request->products as $item) {
+                Product::where('id', $item['id'])
+                    ->update(['display_order' => $item['display_order']]);
+            }
 
-        return response()->json([
-            'success' => true,
-            'message' => 'Products reordered successfully',
-        ]);
+            DB::commit();
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Products reordered successfully',
+            ]);
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to reorder products',
+                'error' => $e->getMessage(),
+            ], 500);
+        }
     }
 
     /**
@@ -353,10 +368,12 @@ class ProductController extends Controller
                 'id' => $product->id,
                 'name' => $product->name,
                 'capacity' => $product->capacity,
+                'highlight_description' => $product->highlight_description,
                 'detailSpecs' => $product->detail_specs,
                 'images' => $product->images->pluck('url')->toArray(),
                 'tags' => $product->tags ?? [],
                 'category' => $product->category,
+                'display_order' => $product->display_order,
             ];
         });
 

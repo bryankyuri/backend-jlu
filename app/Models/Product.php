@@ -14,6 +14,7 @@ class Product extends Model
         'uuid',
         'category',
         'name',
+        'highlight_description',
         'capacity',
         'detail_specs',
         'tags',
