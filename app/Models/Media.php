@@ -47,16 +47,7 @@ class Media extends Model
      */
     private function getBaseUrl()
     {
-        $env = config('app.env');
-        
-        switch ($env) {
-            case 'production':
-                return 'https://api.parallelstudio.asia';
-            case 'staging':
-                return 'https://staging-api.parallelstudio.asia';
-            default:
-                return config('app.url');
-        }
+        return config('app.url');
     }
 
     /**

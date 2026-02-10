@@ -65,8 +65,8 @@ return [
     */
 
     'frontend_url_local' => env('FRONTEND_URL_LOCAL', 'http://localhost:5173'),
-    'frontend_url_staging' => env('FRONTEND_URL_STAGING', 'https://staging-cms.parallelstudio.asia'),
-    'frontend_url_production' => env('FRONTEND_URL_PRODUCTION', 'https://cms.parallelstudio.asia'),
+    'frontend_url_staging' => env('FRONTEND_URL_STAGING', 'https://cms-staging.jasalaksautama.co.id'),
+    'frontend_url_production' => env('FRONTEND_URL_PRODUCTION', 'https://cms.jasalaksautama.co.id'),
 
     /*
     |--------------------------------------------------------------------------

@@ -23,9 +23,9 @@ class AuthController extends Controller
         
         switch ($env) {
             case 'production':
-                return config('app.frontend_url_production', 'https://cms.parallelstudio.asia');
+                return config('app.frontend_url_production', 'https://cms.jasalaksautama.co.id');
             case 'staging':
-                return config('app.frontend_url_staging', 'https://staging-cms.parallelstudio.asia');
+                return config('app.frontend_url_staging', 'https://cms-staging.jasalaksautama.co.id');
             default:
                 return config('app.frontend_url_local', 'http://localhost:3000');
         }

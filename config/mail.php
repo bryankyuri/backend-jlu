@@ -122,6 +122,6 @@ return [
     |
     */
 
-    'contact_email' => env('MAIL_USERNAME', 'contact@parallelstudio.asia'),
+    'contact_email' => env('MAIL_USERNAME', 'contact@jasalaksautama.co.id'),
 
 ];
